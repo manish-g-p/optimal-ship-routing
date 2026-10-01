@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-10-01 (initialization loop, branch
+**Last updated:** 2026-10-01 (Loop 001 — TASK-001 Docker environment, branch
 `refactor/docker-containerization`)
 
 This document is rebuilt/updated at the end of every loop. It describes what
@@ -106,10 +106,34 @@ definition — multi-algorithm, scenario-based, evidence-driven comparison.
   flag attached to a route result, and no scenario-defined constraint
   framework yet.
 
+### Implemented and working (added by Loop 001 — TASK-001)
+
+- **Docker development environment.** `Dockerfile` (python:3.12-slim base,
+  pinned dependencies, generated secret-free `web_config.py`), `.dockerignore`,
+  and an optional `docker-compose.yml` for bind-mounted local dev. Full
+  details, exact commands, and what was verified vs. assumed are in
+  `DOCKER.md` at the repo root — not duplicated here.
+- **Pinned dependencies.** `requirements.txt` now pins all 16 direct
+  dependencies to the exact versions already verified working on the host
+  `.venv` (resolves the "Unpinned dependency versions" unknown previously
+  listed below). No package was added, removed, or upgraded.
+- Verified, with real `docker build`/`docker run`/`docker compose` against
+  a live Docker engine (including one full `--no-cache` rebuild from zero
+  cached layers): the image builds reproducibly, all dependencies import
+  with `--network none`, and `python -m src.evaluate` / `python run_all.py`
+  run fully offline and reproduce the committed
+  `data/processed/evaluation.csv` exactly except for wall-clock timing
+  columns.
+- Fixed `server.py` binding to `WC.HOST` (env-configurable, default
+  unchanged at `"127.0.0.1"`) instead of a hardcoded `"127.0.0.1"`, so the
+  Flask UI is reachable from outside its container via `docker run -p`
+  (verified broken before, working after). The Docker image sets
+  `HOST=0.0.0.0`; bare-metal runs are unaffected.
+
 ### Planned (not yet started)
 
-- Docker development environment (Dockerfile, compose, dev workflow).
-- Docker Hub image build/publish workflow; remote-server pull/run.
+- Docker Hub image build/publish workflow; remote-server pull/run
+  (TASK-002/003/004 — explicitly deferred, see `TASKS.md`).
 - Common routing-algorithm interface (`RoutingProblem` → `RoutingAlgorithm`
   → `RouteResult`) decoupled from the two existing hardcoded functions.
 - Additional algorithms: Bidirectional Dijkstra, Bidirectional A*,
@@ -130,16 +154,33 @@ definition — multi-algorithm, scenario-based, evidence-driven comparison.
 
 ### Unknowns requiring investigation
 
-- **Dependency versions.** `requirements.txt` lists package names with no
-  version pins. The exact versions currently installed in `.venv`
-  (Python 3.12.3) are not yet captured anywhere reproducible. This is
-  directly relevant to TASK-001 (a Docker image needs pinned versions to
-  be reproducible) and should be determined by inspecting `.venv`, not
-  assumed.
-- **Host-level system dependencies**, if any, that `netCDF4`/`xarray`/
-  `scipy`/`scikit-learn` wheels might implicitly rely on (e.g. HDF5/NetCDF
-  shared libraries) when installed in a minimal container base image —
-  not yet verified.
+- ~~**Dependency versions.**~~ **Resolved by Loop 001.** `requirements.txt`
+  is now pinned to the exact versions verified working both on the host
+  `.venv` and inside the Docker image.
+- ~~**Host-level system dependencies**~~ **Resolved by Loop 001.**
+  Verified: `netCDF4`, `xarray`, `scipy`, `scikit-learn`, and every other
+  pinned dependency install cleanly as manylinux wheels on a plain
+  `python:3.12-slim` base image — no extra `apt` packages were needed.
+- **New: scikit-learn version skew in the shipped ML model artifact.**
+  `data/processed/speed_model.joblib` was pickled under scikit-learn
+  1.8.0; the host `.venv` (and now the pinned `requirements.txt`) has
+  1.9.0. Loading it prints an `InconsistentVersionWarning`. Investigated
+  in Loop 001: container output was diffed byte-for-byte against the
+  host-committed `evaluation.csv` and found identical on every column
+  except wall-clock runtime, so this has not changed behavior today —
+  but it is a real, pre-existing fragility (not introduced by
+  containerization) worth resolving in Phase 2 by either retraining the
+  model under 1.9.0 or pinning scikit-learn to 1.8.0. See `BLOCKERS.md`
+  and `DOCKER.md`.
+- **New: a real-looking Google Maps API key as a local, uncommitted
+  default in `web_config.py`.** Found during Loop 001. Confirmed via
+  `git diff`/`git log`/`git show origin/main:web_config.py` that it is
+  **not** committed to any branch and **not** on `origin` — local-only.
+  Not modified by this project (it is the developer's own local file);
+  excluded from the Docker build context instead so it can never be
+  baked into an image. See the "Security note" in `DOCKER.md`. If this
+  key is real and was ever copied/synced elsewhere, it should be rotated
+  — that decision belongs to the developer, not to this loop.
 - **No automated tests exist in the repository** (no `test_*.py`,
   `tests/`, or test runner configuration were found). "Validation" today
   means manually running `run_all.py` / `src/evaluate.py` and inspecting
@@ -165,7 +206,13 @@ definition — multi-algorithm, scenario-based, evidence-driven comparison.
 | `python server.py` | Flask + Google Maps UI on port 8000 (needs `GOOGLE_MAPS_API_KEY`). |
 | `streamlit run app.py` | Streamlit UI on port 8501, no API key required. |
 
-## Dependencies (from `requirements.txt`, unpinned)
+## Running in Docker
+
+As of Loop 001, all entry points above also run inside the
+`nautilus-dev` Docker image without any host Python installation — see
+`DOCKER.md` for exact commands and what was verified.
+
+## Dependencies (from `requirements.txt`, pinned as of Loop 001)
 
 numpy, scipy, xarray, netCDF4, dask, networkx, scikit-learn, joblib,
 pandas, matplotlib, requests, flask, flask-cors, streamlit, folium,

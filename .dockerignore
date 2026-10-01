@@ -1,0 +1,36 @@
+# Keep the build context small and avoid shipping host-only artifacts into
+# the image. Mirrors the exclusions in .gitignore plus Docker-specific ones.
+
+# --- Version control / local tooling ---
+.git/
+.claude/
+.venv/
+__pycache__/
+*.pyc
+
+# --- Secrets: never bake these into an image layer ---
+# web_config.py is a PRIVATE, locally-edited file: its tracked/default
+# content is just `os.environ.get("GOOGLE_MAPS_API_KEY", "")`, but a
+# developer may locally paste a real key into it as the fallback default
+# for convenience (its own docstring assumes it's gitignored, matching
+# that workflow). Excluded here so whatever is currently sitting in a
+# developer's local copy - secret or not - never ends up baked into an
+# image layer that could later be pushed to a registry. The Dockerfile
+# generates a safe, secret-free stand-in inside the image instead; pass
+# the real key at `docker run` time with -e GOOGLE_MAPS_API_KEY=...
+web_config.py
+.env
+.streamlit/secrets.toml
+
+# --- Big raw datasets: not needed at runtime, only for one-time preprocess.
+# data/processed/ (the small generated artifacts) IS committed and IS
+# needed at runtime, so it is intentionally NOT excluded here. ---
+*.nc
+
+# --- Non-runtime documentation (keeps the image smaller) ---
+docs/*.pdf
+docs/*.pptx
+
+# --- Misc ---
+*.log
+.DS_Store

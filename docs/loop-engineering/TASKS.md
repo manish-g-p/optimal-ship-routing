@@ -19,7 +19,7 @@ There must be exactly one `READY` task at a time.
 **Goal:** Make Nautilus reproducibly executable on the remote server
 through Docker.
 
-### TASK-001 — Establish reproducible Docker development environment — `READY`
+### TASK-001 — Establish reproducible Docker development environment — `DONE`
 
 **Purpose:** Determine and containerize the existing Nautilus
 development/runtime environment so the current application can run
@@ -63,10 +63,54 @@ out to be useful — not assumed up front).
 **Depends on:** nothing (first task).
 **Blocks:** TASK-002, TASK-003, TASK-004 below.
 
-### TASK-002 — Docker Hub image workflow — `BACKLOG`
+**Completed:** Loop 001, 2026-10-01. All five scope items done and
+validated against a real Docker engine, including one full `--no-cache`
+rebuild from zero cached layers. Full evidence in `DOCKER.md` and
+`EXPERIMENTS.md` (EXP-001). Summary:
+
+1. Dependencies inspected and pinned in `requirements.txt` (16 direct
+   deps, versions captured from the working host `.venv`).
+2. `Dockerfile` created (`python:3.12-slim`, pinned deps, generated
+   secret-free `web_config.py`); `.dockerignore` created;
+   `docker-compose.yml` created (turned out useful for the documented dev
+   workflow — bind-mounted source, port mapping).
+3. Image built successfully, including a from-scratch `--no-cache`
+   rebuild after pruning the build cache.
+4. `python -m src.evaluate` and `python run_all.py` both verified to run
+   with `--network none` (no internet at all) and to reproduce the
+   committed `data/processed/evaluation.csv` exactly except for
+   wall-clock timing columns.
+5. Verified offline/self-sufficient: no raw `.nc` files needed (already
+   known not to be required), no host Python/system libraries needed
+   beyond Docker itself.
+
+One additional, goal-essential fix was made beyond the five scope items:
+`server.py` hardcoded `host="127.0.0.1"`, which made the Flask UI
+unreachable from outside its own container even with `-p` port mapping —
+directly undermining the "run Nautilus remotely via Docker and use it"
+workflow the Source of Truth describes. Fixed to read an env-configurable
+`WC.HOST` (default unchanged); the image sets `HOST=0.0.0.0`. Verified
+broken before the fix (`curl` to `/api/meta` returned nothing) and
+working after (correct JSON, and a full `POST /api/route` round-trip).
+
+Two pre-existing issues were discovered, investigated, and documented
+(not fixed, as neither is a containerization problem): a scikit-learn
+1.8.0-vs-1.9.0 pickle-compatibility warning on the shipped ML model
+(behavior confirmed unchanged), and a real-looking Google Maps API key
+present only as a local, uncommitted default in the developer's
+`web_config.py` (confirmed not committed/pushed anywhere; excluded from
+the Docker build context so it can never be baked into an image). See
+`PROJECT_STATE.md` Unknowns and `DOCKER.md`.
+
+### TASK-002 — Docker Hub image workflow — `READY`
 
 Push the validated development image (or a derived build) to Docker Hub
-so it can be pulled elsewhere. Depends on TASK-001 succeeding.
+so it can be pulled elsewhere. Depends on TASK-001 succeeding (it has).
+**Not started** — explicitly out of scope for the loop that completed
+TASK-001 ("Do not push images to Docker Hub or configure the remote
+server yet"). Promoted to the single `READY` task for the next loop,
+per the "exactly one READY task" rule; execution awaits that loop (or
+explicit authorization to proceed now).
 
 ### TASK-003 — Pull and run on the remote server — `BACKLOG`
 
@@ -155,6 +199,8 @@ core application is stable — not chosen yet.
 
 ## Current READY task
 
-**TASK-001 — Establish reproducible Docker development environment**
+**TASK-002 — Docker Hub image workflow**
 
-(See Phase 1 above for full scope.)
+(See Phase 1 above for full scope. TASK-001 is `DONE` — see its entry
+above for evidence. TASK-002 is defined but **not started**: this loop
+was explicitly scoped to local/container validation only.)

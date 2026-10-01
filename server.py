@@ -217,5 +217,9 @@ def api_route():
 
 
 if __name__ == "__main__":
-    print(f"[server] http://localhost:{WC.PORT}")
-    app.run(host="127.0.0.1", port=WC.PORT, debug=False, threaded=True)
+    # HOST defaults to 127.0.0.1 (unchanged local-run behavior). The Docker
+    # image sets HOST=0.0.0.0 so the Flask dev server is reachable from
+    # outside its container via `docker run -p` - see Dockerfile.
+    host = getattr(WC, "HOST", "127.0.0.1")
+    print(f"[server] http://localhost:{WC.PORT}  (bound to {host})")
+    app.run(host=host, port=WC.PORT, debug=False, threaded=True)
