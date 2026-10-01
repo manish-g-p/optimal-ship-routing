@@ -72,23 +72,24 @@ of TASK-001 — fixing it means either retraining the model under 1.9.0 or
 pinning scikit-learn to 1.8.0, both of which are ML/dependency decisions
 for whoever picks up Phase 2 routing-foundation work, not a Docker task.
 
-### Q7 — Real-looking Google Maps API key found locally in `web_config.py` (new, Loop 001) — needs a human decision
+### Q7 — Real-looking Google Maps API key found locally in `web_config.py` (Loop 001) — MIGRATED, not resolved (Loop 002)
 
-While inspecting the repo for TASK-001, the on-disk `web_config.py`
-(uncommitted, unstaged) was found to default `GOOGLE_MAPS_API_KEY` to
-what looks like a real key rather than the empty string its own
-docstring describes. Checked and confirmed:
+Originally found in Loop 001: a real-looking key as `web_config.py`'s
+local, uncommitted default. Confirmed then (and still true) that it was
+never committed or pushed — `git log --follow`/`git show
+origin/main:web_config.py` showed no trace of it in any commit.
 
-- `git diff` — local, uncommitted change only.
-- `git log --follow -- web_config.py` and
-  `git show origin/main:web_config.py` — the key is in **no commit**, on
-  this branch, `main`, or `origin/main`. It has never been pushed.
+**Loop 002 update:** as part of centralizing configuration into `.env`
+(see `PROJECT_STATE.md` and `DOCKER.md` "Secret management"), that local
+value was migrated into a new, gitignored `.env` file and
+`web_config.py` was deleted (`git rm -f`, since it still carried the
+uncommitted value — the value was read and moved before deletion, not
+discarded). The key itself was never printed in full in any command
+output, log, or document produced by either loop.
 
-This task did **not** modify the file (it's the developer's own local
-config, not something this task should silently alter) and did **not**
-include it in the Docker build context (added to `.dockerignore`; the
-image generates its own safe, empty-default version at build time — see
-`DOCKER.md`). This is flagged, not resolved, because the right action —
-whether to rotate the key, whether it's actually a live/billable key,
-whether it's been shared anywhere outside this machine — is a judgment
-call only the developer can make. No further action was taken here.
+**Still open, still a human decision:** this only *relocated* the key to
+where it's supposed to live (a local, gitignored `.env`) — it did not
+determine whether the key is real/live, whether it's billable, or
+whether it has ever been shared/synced anywhere outside this machine. If
+so, rotating it in Google Cloud Console is still your call, not
+something either loop assumed or acted on.

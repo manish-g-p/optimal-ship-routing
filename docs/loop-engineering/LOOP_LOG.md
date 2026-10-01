@@ -4,6 +4,95 @@ Chronological record of each development loop. Newest entry on top.
 
 ---
 
+## Loop 002 — Centralize and secure Nautilus configuration and secrets
+
+**Date:** 2026-10-01
+**Branch:** `refactor/docker-containerization`
+**Task:** User-directed (not a pre-existing TASKS.md item): remove
+hardcoded secrets, centralize config in `.env`, eliminate redundant
+`web_config.py` references, keep Docker working.
+
+**What was done:**
+
+1. Re-read `docs/Source_Of_Truth.md`, `PROJECT_STATE.md`, `DOCKER.md`;
+   confirmed no `AGENTS.md`. Inspected `config.py`, the (now-removed)
+   `web_config.py`, every `WC.*`/`web_config` reference (`server.py`,
+   `Dockerfile`, `docker-compose.yml`, `DOCKER.md`, `README.md`,
+   `tools/generate_demo_guide.py`).
+2. Ran a repo-wide search for additional secrets: keyword patterns
+   (api_key/secret/password/token/credential/etc.), long opaque-string
+   scan, AWS-key patterns, DB connection-string patterns, existing
+   `.env`/credential files. Found exactly one genuine secret in the
+   entire repository: the Google Maps API key already known from Loop
+   001 (as a local, uncommitted default in `web_config.py`). Confirmed
+   `src/live_weather.py`'s Open-Meteo API needs no key.
+3. Migrated that local key value into a new `.env` (gitignored, never
+   printed in full in any output/doc/log) and `.env.example` (safe
+   placeholder, committed). Added `python-dotenv==1.2.4` to
+   `requirements.txt` (version captured from a real `pip install` on the
+   host, consistent with the existing pinning convention).
+4. Merged the settings `web_config.py` used to hold
+   (`GOOGLE_MAPS_API_KEY`, `PORT`, `HOST`) into `config.py`, which now
+   calls `load_dotenv()` (guarded by `try/except ImportError` so routing/
+   evaluation code doesn't break if `python-dotenv` is somehow absent).
+5. Updated `server.py`: removed `import web_config as WC`; replaced all
+   `WC.*` with `C.*`; added one non-fatal startup warning (never the key
+   value) when `GOOGLE_MAPS_API_KEY` is unset.
+6. Deleted `web_config.py` with `git rm -f` (force needed — it still
+   carried the uncommitted real-key value, which had already been
+   migrated to `.env` first, so nothing was lost).
+7. Updated `Dockerfile` (removed the now-obsolete generated-`web_config.py`
+   step), `.dockerignore` (excludes `.env`/`.env.*`, un-excludes
+   `.env.example`), `docker-compose.yml`, `DOCKER.md`, and `README.md` to
+   remove `web_config.py` references and document the `.env` workflow.
+8. **Found and fixed a real bug introduced by my own first draft:**
+   `.env`/`.env.example` initially included `PORT`/`HOST` alongside the
+   real secret. Testing `docker run --env-file .env` (not just reading
+   the diff) showed this silently overrode the Dockerfile's
+   `ENV HOST=0.0.0.0` back to `127.0.0.1`, reintroducing the exact
+   container-unreachability bug Loop 001 had fixed. Fixed by removing
+   `PORT`/`HOST` from the `.env` template (correctly recognizing them as
+   ordinary deployment config, not secrets — matching the task's
+   instruction not to indiscriminately move ordinary config into `.env`)
+   and adding an explicit `HOST=0.0.0.0` in `docker-compose.yml`'s
+   `nautilus-flask` service as a second safety net.
+9. Validated with real `docker build`/`run`/`compose` commands throughout
+   (see `DOCKER.md` and the Validation section of the final report for
+   this loop) — not just inspection. Every check that could have printed
+   the secret was redacted or value-length-checked instead (e.g.
+   `docker compose config` piped through `sed` to redact before it ever
+   reached visible output).
+10. Updated `PROJECT_STATE.md`, `BLOCKERS.md` (Q7 marked migrated, not
+    fully resolved — rotation is still a human decision), and this log.
+
+**Validation:** Real `docker build` (cached and `--no-cache`), `docker
+run` with and without `--env-file .env`, `docker compose config`/`run`,
+image-filesystem and `docker history` scans confirming the secret is
+never baked into any layer, and a byte-for-byte diff of
+`data/processed/evaluation.csv` against the pre-change baseline
+confirming routing/evaluation behavior is unchanged. Full detail in the
+final report delivered for this task (not duplicated here — see
+`CHANGE_LOG.md` for the file-level summary).
+
+**Analysis:** The codebase had exactly one real secret, and it is now
+correctly sourced from the environment with no hardcoded fallback
+anywhere. The `web_config.py` → `config.py` consolidation removed a
+redundant configuration module without touching routing, ML, or UI
+behavior. The `PORT`/`HOST`-in-`.env` bug is a useful reminder that
+"centralize config in `.env`" and "these are secrets" are not the same
+claim — conflating them broke Docker reachability, caught only by
+actually running the container, not by reasoning about the diff.
+
+**Decision:** Done. No further `.env`/secret-management work is pending
+from this loop. Whether the discovered key should be rotated remains the
+developer's decision (see `BLOCKERS.md` Q7).
+
+**Next task:** None assigned by this loop — it was a standalone
+configuration/security cleanup, not a `TASKS.md` roadmap item. TASK-002
+(Docker Hub image workflow) remains the roadmap's `READY` task.
+
+---
+
 ## Loop 001 — TASK-001: Establish reproducible Docker development environment
 
 **Date:** 2026-10-01

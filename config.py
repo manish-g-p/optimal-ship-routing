@@ -3,8 +3,27 @@ Central configuration for the Optimal Ship Routing system.
 
 Everything tunable lives here so the rest of the code stays clean.
 Edit BBOX / GRID_RES if you ever want a different region or resolution.
+
+Secrets and per-environment values (the Google Maps API key, the Flask
+port/host) are NOT hardcoded here - they are read from the process
+environment, optionally populated from a local .env file (see
+.env.example). Never commit .env; it is excluded in .gitignore.
 """
+import os
 from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    # Does not overwrite a variable that's already set in the real shell
+    # environment (override=False, the default) - so `export
+    # GOOGLE_MAPS_API_KEY=...` before running still takes precedence over
+    # .env, matching the project's prior documented behavior.
+    load_dotenv()
+except ImportError:
+    # python-dotenv is in requirements.txt, but routing/evaluation code
+    # that imports this module should not break if it's somehow missing -
+    # only the Flask web settings below would be unavailable without it.
+    pass
 
 # ----------------------------------------------------------------------
 # Paths
@@ -69,3 +88,22 @@ W_PERIOD      = 0.1    # short, choppy periods are slightly worse
 MAX_WEATHER_MULT = 4.0
 
 KM_PER_DEG = 111.195   # mean km per degree of latitude
+
+# ----------------------------------------------------------------------
+# Flask web UI settings (formerly web_config.py - merged in here so there
+# is a single configuration module, with secrets/per-environment values
+# coming from the environment / .env rather than being hardcoded).
+# ----------------------------------------------------------------------
+# Google Maps JavaScript API key for server.py's web UI. Empty by default
+# so the app starts and the JSON API still works with no key configured;
+# server.py logs a non-fatal warning (not an error, and never the key
+# value itself) when this is empty. Set it in .env - see .env.example.
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+
+# Port the Flask app (server.py) listens on.
+PORT = int(os.environ.get("PORT", "8000"))
+
+# Interface the Flask dev server binds to. 127.0.0.1 (localhost only) is
+# the safe default outside Docker; the Docker image sets HOST=0.0.0.0 so
+# `docker run -p` can reach it (see Dockerfile).
+HOST = os.environ.get("HOST", "127.0.0.1")

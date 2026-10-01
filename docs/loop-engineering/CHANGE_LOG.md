@@ -6,6 +6,76 @@ file-level changes.
 
 ---
 
+## 2026-10-01 — Loop 002: centralize and secure configuration/secrets
+
+**Added:**
+
+- `.env` — real local config (gitignored, never committed).
+- `.env.example` — documents every variable (`GOOGLE_MAPS_API_KEY` only
+  — see below for why `PORT`/`HOST` were deliberately left out) with a
+  safe placeholder; committed.
+
+**Removed:**
+
+- `web_config.py` — deleted (`git rm -f`). Its one real setting
+  (`GOOGLE_MAPS_API_KEY`) and its two ordinary settings (`PORT`, `HOST`)
+  were merged into `config.py`.
+
+**Changed:**
+
+- `config.py` — now loads `.env` via `python-dotenv` (optional import,
+  won't break routing/evaluation code if absent) and reads
+  `GOOGLE_MAPS_API_KEY`/`PORT`/`HOST` from the environment.
+- `server.py` — `import web_config as WC` removed; all `WC.*` replaced
+  with `C.*`; added a non-fatal startup warning (never the key value)
+  when no Maps key is configured.
+- `requirements.txt` — added `python-dotenv==1.2.4`.
+- `Dockerfile` — removed the now-obsolete step that generated a
+  secret-free `web_config.py` stand-in (nothing to generate anymore).
+- `.dockerignore` — excludes `.env`/`.env.*`, explicitly un-excludes
+  `.env.example`.
+- `docker-compose.yml` — loads `.env` via `env_file: [{path: .env,
+  required: false}]`; `nautilus-flask` pins `HOST=0.0.0.0` explicitly
+  (see bug note below).
+- `DOCKER.md`, `README.md` — updated run instructions and references
+  from `web_config.py`/`-e GOOGLE_MAPS_API_KEY=...` to `.env`/
+  `--env-file .env`; added a "Secret management" section to `DOCKER.md`.
+
+**Not changed:** routing logic, ML model/behavior, evaluation results,
+UI behavior/markup, any dependency's functionality beyond adding one new
+pinned package. `src/live_weather.py`'s Open-Meteo API needs no key and
+was not touched.
+
+**Bug found and fixed in this loop (not pre-existing):** the first draft
+of `.env`/`.env.example` included `PORT`/`HOST` next to the real secret.
+Loading that file via `docker run --env-file .env` silently overrode the
+Dockerfile's `ENV HOST=0.0.0.0`, making the Flask UI unreachable from
+outside its container again — the same class of bug Loop 001 had just
+fixed. Caught by actually testing `--env-file`, not by inspection. Fixed
+by removing `PORT`/`HOST` from the `.env` template (they are deployment
+config, not secrets) and pinning `HOST=0.0.0.0` explicitly in the
+`nautilus-flask` compose service as a second safety net.
+
+**Security findings:** exactly one genuine secret in the whole
+repository (Google Maps API key), found already flagged from Loop 001 as
+a local-only, never-committed value in `web_config.py`. A repo-wide
+search (keyword patterns, opaque-string scan, AWS-key patterns, DB
+connection-string patterns) found nothing else. That value was migrated
+into `.env` (never printed in full anywhere) rather than discarded, and
+`web_config.py` was removed. Whether the key should be rotated is a
+human decision, not made or assumed here — see
+`docs/loop-engineering/BLOCKERS.md` Q7.
+
+**Validated with:** real `docker build` (cached + `--no-cache`),
+`docker run` with and without `--env-file .env`, `docker compose
+config`/`run` (secret redacted before ever reaching visible output),
+image-filesystem and `docker history` scans confirming the secret is
+never baked into any image layer, and a byte-for-byte diff of
+`data/processed/evaluation.csv` against the pre-change baseline
+confirming routing/evaluation output is unchanged.
+
+---
+
 ## 2026-10-01 — Loop 001: TASK-001, reproducible Docker development environment
 
 **Added:**

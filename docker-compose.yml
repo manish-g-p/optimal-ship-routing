@@ -19,6 +19,17 @@ services:
     volumes:
       - .:/app
     working_dir: /app
+    # Load GOOGLE_MAPS_API_KEY from a local .env if one exists;
+    # `required: false` means compose doesn't error when a fresh checkout
+    # has no .env yet (see .env.example). Values set here become real
+    # container environment variables, so there's no conflict with
+    # config.py's own load_dotenv() call - that becomes a harmless no-op
+    # once compose has already populated them the same way. .env.example
+    # deliberately does NOT include PORT/HOST (see its comments - setting
+    # HOST there would fight the HOST=0.0.0.0 below).
+    env_file:
+      - path: .env
+        required: false
     tty: true
     stdin_open: true
 
@@ -27,9 +38,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Set on the host shell before `docker compose up` to enable the
-      # Google Maps frontend; the API endpoints work without it.
-      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      # Explicit, not from .env (see note above) - keeps the Flask dev
+      # server reachable from the host regardless of what's in .env.
+      - HOST=0.0.0.0
     command: python server.py
 
   nautilus-streamlit:

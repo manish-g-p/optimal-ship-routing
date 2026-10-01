@@ -18,7 +18,10 @@
 #   docker run --rm -p 8501:8501 nautilus-dev \
 #       streamlit run app.py --server.address=0.0.0.0
 #
-# Run the Flask UI (requires a Google Maps API key):
+# Run the Flask UI (Google Maps key optional - map tiles won't render
+# without one, everything else works):
+#   docker run --rm -p 8000:8000 --env-file .env nautilus-dev python server.py
+#   # or:
 #   docker run --rm -p 8000:8000 -e GOOGLE_MAPS_API_KEY=your-key nautilus-dev \
 #       python server.py
 #
@@ -41,27 +44,19 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Now bring in the rest of the project. .dockerignore keeps the raw
-# multi-gigabyte NetCDF datasets, the host venv, .git, and the developer's
-# local web_config.py (which may hold a real Maps API key) out of the image.
+# multi-gigabyte NetCDF datasets, the host venv, .git, and any local .env
+# file (which may hold a real Maps API key) out of the image - config.py
+# reads secrets from the environment at runtime instead of from a file
+# baked into the image, so there is nothing here to generate or exclude
+# beyond the plain .env exclusion.
 COPY . .
 
-# web_config.py is intentionally NOT copied in (see .dockerignore) so a
-# developer's local API key can never end up in an image layer. Generate a
-# safe, secret-free stand-in with the same shape server.py expects - real
-# values are supplied at `docker run` time via environment variables.
-RUN printf '%s\n' \
-    'import os' \
-    '' \
-    'GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")' \
-    'PORT = int(os.environ.get("PORT", "8000"))' \
-    'HOST = os.environ.get("HOST", "127.0.0.1")' \
-    > web_config.py
-
-# Flask's dev server binds host="127.0.0.1" by default (see server.py),
-# which is unreachable from outside its own container even with `-p`.
-# Default to 0.0.0.0 inside the image so `docker run -p 8000:8000` works
-# out of the box; a bare-metal `python server.py` run outside Docker still
-# defaults to 127.0.0.1 since this only overrides the image's environment.
+# Flask's dev server binds host="127.0.0.1" by default (see config.py /
+# server.py), which is unreachable from outside its own container even
+# with `-p`. Default to 0.0.0.0 inside the image so `docker run -p
+# 8000:8000` works out of the box; a bare-metal `python server.py` run
+# outside Docker still defaults to 127.0.0.1 since this only sets the
+# image's environment, not the host's.
 ENV HOST=0.0.0.0
 
 # Flask (server.py) and Streamlit (app.py) default ports, documented here

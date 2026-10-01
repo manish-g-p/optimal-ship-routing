@@ -20,12 +20,19 @@ from flask import (Flask, jsonify, request, send_from_directory, Response,
                    send_file)
 
 import config as C
-import web_config as WC
 from src import (grid as G, weather as W, routing as R, ports as P,
                  vessel as V, ml_model as ML, live_weather as LW)
 
 WEB = Path(__file__).resolve().parent / "web"
 app = Flask(__name__)
+
+if not C.GOOGLE_MAPS_API_KEY:
+    # Non-fatal: the JSON API and every routing feature work without a
+    # Maps key, only the map tiles won't render. Never log the key value
+    # itself, set or not.
+    print("[server] WARNING: GOOGLE_MAPS_API_KEY is not set - the map "
+          "will not load. Set it in .env (see .env.example) or export it "
+          "in your shell before running.")
 
 # ----------------------------------------------------------------------
 # Load heavy objects once, then cache derived fields.
@@ -99,7 +106,7 @@ def result_json(weather, res):
 @app.route("/")
 def index():
     html = (WEB / "index.html").read_text(encoding="utf-8")
-    html = html.replace("__MAPS_KEY__", WC.GOOGLE_MAPS_API_KEY)
+    html = html.replace("__MAPS_KEY__", C.GOOGLE_MAPS_API_KEY)
     return Response(html, mimetype="text/html")
 
 
@@ -220,6 +227,5 @@ if __name__ == "__main__":
     # HOST defaults to 127.0.0.1 (unchanged local-run behavior). The Docker
     # image sets HOST=0.0.0.0 so the Flask dev server is reachable from
     # outside its container via `docker run -p` - see Dockerfile.
-    host = getattr(WC, "HOST", "127.0.0.1")
-    print(f"[server] http://localhost:{WC.PORT}  (bound to {host})")
-    app.run(host=host, port=WC.PORT, debug=False, threaded=True)
+    print(f"[server] http://localhost:{C.PORT}  (bound to {C.HOST})")
+    app.run(host=C.HOST, port=C.PORT, debug=False, threaded=True)

@@ -45,12 +45,29 @@ min-coast distance, and wave-exposure columns match exactly; only the
 wall-clock `*_sec` runtime columns differ, as expected on different
 hardware).
 
-## Run the web UIs
+## Configuration and secrets
 
-Flask (Google Maps UI + JSON API; API endpoints work without a key, the
-map tiles need one):
+Nautilus reads its configuration (Google Maps API key, Flask port/host)
+from environment variables, optionally populated from a local `.env`
+file via `python-dotenv` (see `config.py`). Nothing is hardcoded in
+source, and `.env` is never part of the Docker build context (see
+`.dockerignore`) so a real key can never end up baked into an image.
 
 ```bash
+cp .env.example .env   # then edit .env and fill in your real key
+```
+
+`.env` is gitignored - it stays local to your machine. See
+`.env.example` for every variable and what it does.
+
+## Run the web UIs
+
+Flask (Google Maps UI + JSON API; API endpoints and all routing features
+work without a key, only the map tiles need one):
+
+```bash
+docker run --rm -p 8000:8000 --env-file .env nautilus-dev python server.py
+# or, without a .env file:
 docker run --rm -p 8000:8000 -e GOOGLE_MAPS_API_KEY=your-key nautilus-dev python server.py
 ```
 
@@ -72,7 +89,9 @@ docker compose up nautilus-streamlit    # http://localhost:8501
 `docker-compose.yml`'s `nautilus` service bind-mounts the repo into
 `/app` for live code editing during development; the plain `docker run`
 commands above do not (they use exactly what was baked into the image at
-build time).
+build time). It also declares `env_file: [{path: .env, required: false}]`,
+so if you have a local `.env` it's picked up automatically - no
+`--env-file` flag needed with `docker compose`.
 
 ## What was actually verified (not assumed)
 
@@ -143,37 +162,48 @@ different, later goal.
 Not in scope for TASK-001. See TASK-002/003/004 in
 `docs/loop-engineering/TASKS.md`.
 
-## Files added/changed for this task
+## Files added/changed
 
 | File | What / why |
 | --- | --- |
-| `Dockerfile` | New. Builds the dev image described above. |
-| `.dockerignore` | New. Keeps raw datasets, `.git`, `.venv`, and the developer's local `web_config.py` (which may hold a real API key - see below) out of the build context. |
-| `docker-compose.yml` | New. Convenience wrapper for local dev (bind-mounted source, port mapping). Not required to satisfy TASK-001. |
-| `requirements.txt` | Pinned to the exact versions already verified working on the host `.venv` (previously unpinned - see `docs/loop-engineering/BLOCKERS.md` Q1). No package was added, removed, or version-upgraded beyond what was already installed. |
-| `web_config.py` | **Not modified on the host.** Excluded from the Docker build context; the image generates its own safe, secret-free version at build time (empty-default `GOOGLE_MAPS_API_KEY`, env-configurable `HOST`/`PORT`). See "Security note" below. |
-| `server.py` | One-line, env-driven change: `app.run(host=...)` now reads `WC.HOST` (default `"127.0.0.1"`, unchanged for bare-metal runs) instead of hardcoding `"127.0.0.1"`. The Docker image sets `HOST=0.0.0.0` so the Flask dev server is reachable from outside its container via `-p`. Without this, `docker run -p 8000:8000` silently could not reach the server at all (verified before and after: curl to `/api/meta` returned nothing before the fix, correct JSON after). |
+| `Dockerfile` | Builds the dev image described above. |
+| `.dockerignore` | Keeps raw datasets, `.git`, `.venv`, and any local `.env` out of the build context (`.env.example` is explicitly un-excluded since it has no secret). |
+| `docker-compose.yml` | Convenience wrapper for local dev (bind-mounted source, port mapping, optional `.env` loading). Not required - everything it does can be done with plain `docker` commands above. |
+| `requirements.txt` | Pinned to the exact versions verified working on the host `.venv`, plus `python-dotenv` for loading `.env`. |
+| `config.py` | Single configuration module. Loads `.env` via `python-dotenv` (if installed) and reads `GOOGLE_MAPS_API_KEY` / `PORT` / `HOST` from the environment, same as every other setting in the file. |
+| `.env` / `.env.example` | `.env` is your real local config (gitignored, never committed, never part of the Docker build context). `.env.example` documents every variable with safe placeholders and is safe to commit. |
+| `server.py` | Reads `C.GOOGLE_MAPS_API_KEY`/`C.PORT`/`C.HOST` from `config.py` instead of the removed `web_config.py`; logs a non-fatal startup warning (never the key value) when no Maps key is configured. |
 
-## Security note: local `web_config.py`
+## Secret management
 
-While inspecting the repository for this task, the on-disk (uncommitted,
-unstaged) `web_config.py` was found to contain what appears to be a real
-Google Maps API key as its fallback default value. This was checked
-against git history and the remote:
+Nautilus has exactly one genuine secret: the Google Maps JavaScript API
+key, used only by `server.py`'s web UI. It is loaded from the
+environment (`config.py`, optionally via a local `.env` - see above) and
+is never hardcoded in source, never baked into a Docker image layer, and
+`.env` is gitignored so it's never committed.
 
-- `git diff` shows it as a **local, uncommitted** change only.
-- `git log --follow -- web_config.py` and `git show origin/main:web_config.py`
-  confirm the key is **not** in any commit, on this branch, `main`, or
-  `origin/main` — it has not been pushed anywhere.
+The legacy `web_config.py` file (which previously held this value, with
+an empty-string default in git) has been removed; `config.py` is now the
+single configuration module for the whole application, app config
+included.
 
-Nothing in this task modified that file or its contents. To make sure it
-is never baked into an image (which would make it shareable the moment
-this image is pushed anywhere), it was added to `.dockerignore` and the
-Dockerfile now generates its own safe, empty-default copy at build time.
-If you run `docker compose` (which bind-mounts the whole repo into the
-container for live editing), the container will see your actual local
-`web_config.py` at runtime, same as running `python server.py` directly
-on the host — that is expected and is no different from the non-Docker
-workflow. If this key is real and has ever been copied/synced/shared
-anywhere outside this machine, it should be rotated in the Google Cloud
-Console; that decision belongs to you, not this task.
+**Frontend exposure note:** a Google Maps **JavaScript** API key is sent
+to and used by the browser (it's injected into `web/index.html` and
+visible in page source/devtools to anyone who loads the page) - that is
+normal for this type of key and is not a leak by itself. What actually
+keeps it safe to use client-side is restricting it in [Google Cloud
+Console](https://console.cloud.google.com/google/maps-apis) to the HTTP
+referrers (and/or the specific Maps JavaScript API) you actually serve
+this app from, not keeping it out of `.env`/the browser.
+
+**Historical finding (resolved):** during the earlier Docker
+containerization task, a real-looking key was found as a local,
+uncommitted default in `web_config.py`. It was confirmed via `git
+diff`/`git log`/`git show origin/main` to never have been committed or
+pushed anywhere (see `docs/loop-engineering/BLOCKERS.md` Q7 for the
+original investigation). As part of this configuration-centralization
+work, that local value was migrated into `.env` (not printed or
+re-committed anywhere) and `web_config.py` was deleted. If that key is a
+real, live key and has ever been copied/synced/shared outside this
+machine, rotating it in Google Cloud Console is still a decision for
+you, not something this change made or assumed.

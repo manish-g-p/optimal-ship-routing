@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-10-01 (Loop 001 — TASK-001 Docker environment, branch
+**Last updated:** 2026-10-01 (Loop 002 — secret management, branch
 `refactor/docker-containerization`)
 
 This document is rebuilt/updated at the end of every loop. It describes what
@@ -109,26 +109,71 @@ definition — multi-algorithm, scenario-based, evidence-driven comparison.
 ### Implemented and working (added by Loop 001 — TASK-001)
 
 - **Docker development environment.** `Dockerfile` (python:3.12-slim base,
-  pinned dependencies, generated secret-free `web_config.py`), `.dockerignore`,
-  and an optional `docker-compose.yml` for bind-mounted local dev. Full
-  details, exact commands, and what was verified vs. assumed are in
-  `DOCKER.md` at the repo root — not duplicated here.
-- **Pinned dependencies.** `requirements.txt` now pins all 16 direct
+  pinned dependencies), `.dockerignore`, and an optional `docker-compose.yml`
+  for bind-mounted local dev. Full details, exact commands, and what was
+  verified vs. assumed are in `DOCKER.md` at the repo root — not duplicated
+  here. (Loop 001 originally had the Dockerfile generate a secret-free
+  `web_config.py` stand-in at build time; **superseded by Loop 002** below —
+  `web_config.py` no longer exists at all, so there's nothing to generate.)
+- **Pinned dependencies.** `requirements.txt` now pins all direct
   dependencies to the exact versions already verified working on the host
   `.venv` (resolves the "Unpinned dependency versions" unknown previously
-  listed below). No package was added, removed, or upgraded.
+  listed below). No package was added, removed, or upgraded beyond what
+  Loop 002 added (`python-dotenv`, see below).
 - Verified, with real `docker build`/`docker run`/`docker compose` against
-  a live Docker engine (including one full `--no-cache` rebuild from zero
-  cached layers): the image builds reproducibly, all dependencies import
-  with `--network none`, and `python -m src.evaluate` / `python run_all.py`
-  run fully offline and reproduce the committed
-  `data/processed/evaluation.csv` exactly except for wall-clock timing
-  columns.
-- Fixed `server.py` binding to `WC.HOST` (env-configurable, default
+  a live Docker engine (including multiple full `--no-cache` rebuilds from
+  zero cached layers, across both loops): the image builds reproducibly,
+  all dependencies import with `--network none`, and `python -m
+  src.evaluate` / `python run_all.py` run fully offline and reproduce the
+  committed `data/processed/evaluation.csv` exactly except for wall-clock
+  timing columns.
+- Fixed `server.py`'s Flask binding to be env-configurable (default
   unchanged at `"127.0.0.1"`) instead of a hardcoded `"127.0.0.1"`, so the
   Flask UI is reachable from outside its container via `docker run -p`
   (verified broken before, working after). The Docker image sets
-  `HOST=0.0.0.0`; bare-metal runs are unaffected.
+  `HOST=0.0.0.0`; bare-metal runs are unaffected. (Originally read via the
+  now-removed `WC.HOST`; reads `C.HOST` from `config.py` as of Loop 002.)
+
+### Implemented and working (added by Loop 002 — secret management)
+
+- **Single configuration module.** `config.py` is now the only
+  configuration module in the application. It loads a local `.env` (via
+  `python-dotenv`, pinned `python-dotenv==1.2.4`) if one exists, then reads
+  `GOOGLE_MAPS_API_KEY`, `PORT`, and `HOST` from the environment — exactly
+  the settings `web_config.py` used to hold, plus every routing/data
+  setting already there. `web_config.py` has been deleted
+  (`git rm -f`) and no longer exists.
+- **No hardcoded secrets remain in source.** A repo-wide search (secret-
+  pattern keywords, long opaque-string scan, AWS-key patterns, DB
+  connection-string patterns) found exactly one genuine secret in the
+  whole repository: the Google Maps API key. It is the only one that
+  existed, and it is now sourced from the environment, never hardcoded.
+  See `DOCKER.md` → "Secret management" for the full write-up and
+  `BLOCKERS.md` Q7 for how the pre-existing local key value was handled.
+- **`.env` / `.env.example`.** `.env` holds real local values (gitignored,
+  never committed, excluded from the Docker build context).
+  `.env.example` documents every variable with safe placeholders and is
+  committed. Deliberately contains only `GOOGLE_MAPS_API_KEY` — `PORT` and
+  `HOST` are ordinary deployment config, not secrets, and were kept out of
+  the template after a real bug was found and fixed during this loop (see
+  below).
+- **Missing-key handling.** `server.py` logs one clear, non-fatal
+  console warning at startup when `GOOGLE_MAPS_API_KEY` is unset
+  (`"GOOGLE_MAPS_API_KEY is not set - the map will not load..."`), never
+  the key value itself. The app still starts and every non-map feature
+  (JSON API, routing, Streamlit) works with no key configured — verified,
+  not assumed.
+- **Docker compatibility verified**, including a bug found and fixed in
+  this loop: an earlier draft of `.env`/`.env.example` included `PORT`
+  and `HOST` alongside the real secret. Loading that `.env` via `docker
+  run --env-file` silently overrode the Dockerfile's `ENV HOST=0.0.0.0`
+  back to `127.0.0.1`, breaking container reachability again (the exact
+  problem Loop 001 had fixed). Caught by actually testing the
+  `--env-file` path, not just reading the diff. Fixed by removing
+  `PORT`/`HOST` from the `.env` template (they're not secrets and don't
+  belong there) and, as a second safety net, pinning `HOST=0.0.0.0`
+  explicitly in `docker-compose.yml`'s `nautilus-flask` service so it
+  wins over `env_file` even if someone re-adds `HOST` to their own `.env`.
 
 ### Planned (not yet started)
 
@@ -172,15 +217,13 @@ definition — multi-algorithm, scenario-based, evidence-driven comparison.
   containerization) worth resolving in Phase 2 by either retraining the
   model under 1.9.0 or pinning scikit-learn to 1.8.0. See `BLOCKERS.md`
   and `DOCKER.md`.
-- **New: a real-looking Google Maps API key as a local, uncommitted
-  default in `web_config.py`.** Found during Loop 001. Confirmed via
-  `git diff`/`git log`/`git show origin/main:web_config.py` that it is
-  **not** committed to any branch and **not** on `origin` — local-only.
-  Not modified by this project (it is the developer's own local file);
-  excluded from the Docker build context instead so it can never be
-  baked into an image. See the "Security note" in `DOCKER.md`. If this
-  key is real and was ever copied/synced elsewhere, it should be rotated
-  — that decision belongs to the developer, not to this loop.
+- ~~**A real-looking Google Maps API key as a local, uncommitted default
+  in `web_config.py`.**~~ **Migrated by Loop 002**, not fully resolved.
+  Found during Loop 001; confirmed never committed/pushed anywhere. Loop
+  002 moved that local value into `.env` (gitignored) and deleted
+  `web_config.py`. Still open: whether the key is real/live and whether
+  it needs rotation is a human decision neither loop made. See
+  `BLOCKERS.md` Q7 and `DOCKER.md` → "Secret management".
 - **No automated tests exist in the repository** (no `test_*.py`,
   `tests/`, or test runner configuration were found). "Validation" today
   means manually running `run_all.py` / `src/evaluate.py` and inspecting
@@ -203,20 +246,22 @@ definition — multi-algorithm, scenario-based, evidence-driven comparison.
 | `python -m src.grid` | (Re)builds `grid.npz` from `bathymetry.npz`. |
 | `python -m src.evaluate` | Runs the 5-voyage Dijkstra-vs-A* evaluation, writes `data/processed/evaluation.csv`. |
 | `python run_all.py` | preprocess (if needed) → train model (if needed) → evaluate. |
-| `python server.py` | Flask + Google Maps UI on port 8000 (needs `GOOGLE_MAPS_API_KEY`). |
+| `python server.py` | Flask + Google Maps UI on port 8000 (`GOOGLE_MAPS_API_KEY` optional — set via `.env` or the environment; everything but map tiles works without it). |
 | `streamlit run app.py` | Streamlit UI on port 8501, no API key required. |
 
 ## Running in Docker
 
 As of Loop 001, all entry points above also run inside the
 `nautilus-dev` Docker image without any host Python installation — see
-`DOCKER.md` for exact commands and what was verified.
+`DOCKER.md` for exact commands and what was verified. As of Loop 002,
+pass `--env-file .env` (or `-e GOOGLE_MAPS_API_KEY=...`) to `docker run`
+to supply the Maps key; `docker compose` picks up `.env` automatically.
 
-## Dependencies (from `requirements.txt`, pinned as of Loop 001)
+## Dependencies (from `requirements.txt`, pinned as of Loop 001/002)
 
 numpy, scipy, xarray, netCDF4, dask, networkx, scikit-learn, joblib,
-pandas, matplotlib, requests, flask, flask-cors, streamlit, folium,
-streamlit-folium.
+pandas, matplotlib, requests, flask, flask-cors, python-dotenv,
+streamlit, folium, streamlit-folium.
 
 `networkx` is listed but was not seen imported by any file inspected so
 far — unconfirmed whether it is actually used.

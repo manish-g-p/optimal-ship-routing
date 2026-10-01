@@ -9,17 +9,14 @@ __pycache__/
 *.pyc
 
 # --- Secrets: never bake these into an image layer ---
-# web_config.py is a PRIVATE, locally-edited file: its tracked/default
-# content is just `os.environ.get("GOOGLE_MAPS_API_KEY", "")`, but a
-# developer may locally paste a real key into it as the fallback default
-# for convenience (its own docstring assumes it's gitignored, matching
-# that workflow). Excluded here so whatever is currently sitting in a
-# developer's local copy - secret or not - never ends up baked into an
-# image layer that could later be pushed to a registry. The Dockerfile
-# generates a safe, secret-free stand-in inside the image instead; pass
-# the real key at `docker run` time with -e GOOGLE_MAPS_API_KEY=...
-web_config.py
+# config.py reads GOOGLE_MAPS_API_KEY/PORT/HOST from the environment at
+# runtime (optionally populated from .env via python-dotenv) rather than
+# from a file baked into the image, so a real .env never needs to be (and
+# must not be) part of the build context. Pass real values at `docker
+# run` time with --env-file .env or -e KEY=value instead.
 .env
+.env.*
+!.env.example
 .streamlit/secrets.toml
 
 # --- Big raw datasets: not needed at runtime, only for one-time preprocess.
