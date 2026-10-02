@@ -93,16 +93,32 @@ scenarios are calculated, so preprocessing can require several GB of memory.
 
 ### Flask and Google Maps interface
 
-Set the API key in the environment. On Windows PowerShell:
+The Google Maps key (and the Flask port/host) are read from the
+environment, optionally via a local `.env` file. Copy the template and
+fill in your key:
+
+```bash
+cp .env.example .env
+# then edit .env and set GOOGLE_MAPS_API_KEY
+python server.py
+```
+
+Setting the variable directly in your shell instead of using `.env` also
+still works, and takes precedence if both are set. On Windows PowerShell:
 
 ```powershell
 $env:GOOGLE_MAPS_API_KEY = "your-key"
 python server.py
 ```
 
-Open `http://localhost:8000`. Restrict the Google key to the local application
-origin and to the Google Maps JavaScript API. Never store an API key in source
-code or commit it to the repository.
+Open `http://localhost:8000`. The map, the JSON API, and all routing
+features work without a key configured — only the map tiles need one.
+Restrict the Google key in Google Cloud Console to the local application
+origin and to the Google Maps JavaScript API: a Maps JavaScript key is
+sent to and used by the browser, so it is visible in the page source to
+anyone who loads the app — those restrictions, not secrecy, are what
+keep it safe to use client-side. `.env` is gitignored; never commit a
+real key to the repository.
 
 The Flask server exposes:
 
@@ -158,8 +174,8 @@ The trained model is written to `data/processed/speed_model.joblib`.
 ## Repository Contents
 
 ```text
-config.py                 Shared paths and routing parameters
-web_config.py             Environment-based Flask settings
+config.py                 Shared paths, routing parameters, and env/.env-based settings
+.env.example              Template for local secrets/config (copy to .env)
 server.py                 Flask backend, static server, and JSON API
 app.py                    Streamlit interface
 run_all.py                End-to-end preprocessing, training, and evaluation

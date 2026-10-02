@@ -1,18 +1,25 @@
-# Everything here is free and open-source. All already installed on this
-# machine; this file just records what the project needs.
-numpy
-scipy
-xarray
-netCDF4
-dask
-networkx
-scikit-learn
-joblib
-pandas
-matplotlib
-requests
-flask
-flask-cors
-streamlit
-folium
-streamlit-folium
+# Everything here is free and open-source.
+#
+# Pinned to the versions verified working on the development host
+# (Python 3.12.3, linux/x86_64) and inside the Docker dev image built from
+# this file - see docs/loop-engineering/EXPERIMENTS.md (EXP-001) and
+# DOCKER.md. Pinning (rather than loose names) is what makes the Docker
+# build reproducible instead of drifting to whatever is newest on PyPI the
+# day the image is built.
+numpy==2.5.2
+scipy==1.18.1
+xarray==2026.7.0
+netCDF4==1.7.4
+dask==2026.8.0
+networkx==3.6.1
+scikit-learn==1.9.0
+joblib==1.6.0
+pandas==3.0.5
+matplotlib==3.11.1
+requests==2.34.2
+flask==3.1.3
+flask-cors==6.0.5
+python-dotenv==1.2.4
+streamlit==1.63.0
+folium==0.20.0
+streamlit-folium==0.27.4

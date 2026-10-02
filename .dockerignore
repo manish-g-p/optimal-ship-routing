@@ -1,0 +1,33 @@
+# Keep the build context small and avoid shipping host-only artifacts into
+# the image. Mirrors the exclusions in .gitignore plus Docker-specific ones.
+
+# --- Version control / local tooling ---
+.git/
+.claude/
+.venv/
+__pycache__/
+*.pyc
+
+# --- Secrets: never bake these into an image layer ---
+# config.py reads GOOGLE_MAPS_API_KEY/PORT/HOST from the environment at
+# runtime (optionally populated from .env via python-dotenv) rather than
+# from a file baked into the image, so a real .env never needs to be (and
+# must not be) part of the build context. Pass real values at `docker
+# run` time with --env-file .env or -e KEY=value instead.
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# --- Big raw datasets: not needed at runtime, only for one-time preprocess.
+# data/processed/ (the small generated artifacts) IS committed and IS
+# needed at runtime, so it is intentionally NOT excluded here. ---
+*.nc
+
+# --- Non-runtime documentation (keeps the image smaller) ---
+docs/*.pdf
+docs/*.pptx
+
+# --- Misc ---
+*.log
+.DS_Store
