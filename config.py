@@ -105,5 +105,5 @@ PORT = int(os.environ.get("PORT", "8000"))
 
 # Interface the Flask dev server binds to. 127.0.0.1 (localhost only) is
 # the safe default outside Docker; the Docker image sets HOST=0.0.0.0 so
-# `docker run -p` can reach it (see Dockerfile).
+# `docker run -p` can reach it (see docker/Dockerfile).
 HOST = os.environ.get("HOST", "127.0.0.1")

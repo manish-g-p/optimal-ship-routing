@@ -1,5 +1,10 @@
 # Nautilus development image.
 #
+# Lives in docker/ (not the project root) - the build context is still the
+# project root, so every command below is run FROM THE PROJECT ROOT with
+# `-f docker/Dockerfile`, not from inside docker/. See ../DOCKER.md for the
+# full, verified command reference (manual docker + docker compose).
+#
 # Goal (docs/loop-engineering/TASKS.md TASK-001): run the existing Nautilus
 # application/evaluation reproducibly in a container, without requiring the
 # Python/scientific stack to be installed on the host. This is a
@@ -7,8 +12,8 @@
 # production/distribution image described in Source_Of_Truth.md Decision
 # "Development Image vs Deployment Image" - that split is deferred.
 #
-# Build:
-#   docker build -t nautilus-dev .
+# Build (from the project root):
+#   docker build -f docker/Dockerfile -t nautilus-dev .
 #
 # Run the existing evaluation (no GPU, no API key, no raw datasets needed -
 # data/processed/ is already committed to the repo):
@@ -43,9 +48,17 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Now bring in the rest of the project. .dockerignore keeps the raw
-# multi-gigabyte NetCDF datasets, the host venv, .git, and any local .env
-# file (which may hold a real Maps API key) out of the image - config.py
+# Now bring in the rest of the project. The build context is the project
+# root (see the build command above), so ../.dockerignore - i.e. the
+# project root's .dockerignore - is what Docker actually reads here; it
+# keeps the raw multi-gigabyte NetCDF datasets, the host venv, .git, and
+# any local .env file (which may hold a real Maps API key) out of the
+# image. .dockerignore deliberately stays at the project root rather than
+# moving alongside this Dockerfile: Docker always falls back to
+# <context-root>/.dockerignore when no docker/Dockerfile.dockerignore
+# exists, so keeping it at the root (= the context root) is the simplest
+# way to guarantee it's still honored after this relocation - verified by
+# confirming .env is absent from the built image (see DOCKER.md). config.py
 # reads secrets from the environment at runtime instead of from a file
 # baked into the image, so there is nothing here to generate or exclude
 # beyond the plain .env exclusion.

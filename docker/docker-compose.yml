@@ -1,21 +1,37 @@
 # Convenience wrapper around `docker build` / `docker run` for local
 # development. Not required - everything here can be done with plain
-# `docker` commands (see DOCKER.md) - but it saves retyping volume/port
+# `docker` commands (see ../DOCKER.md) - but it saves retyping volume/port
 # flags during day-to-day work on the remote server.
 #
-#   docker compose run --rm nautilus python -m src.evaluate
-#   docker compose up nautilus-flask       # Flask UI on :8000
-#   docker compose up nautilus-streamlit   # Streamlit UI on :8501
+# This file lives in docker/, but every path below (build context,
+# volumes, env_file) is written relative to the PROJECT ROOT, not this
+# file's own directory. That only works if you pass --project-directory
+# when invoking compose - always run these from the project root:
+#
+#   docker compose -f docker/docker-compose.yml --project-directory . \
+#       run --rm nautilus python -m src.evaluate
+#   docker compose -f docker/docker-compose.yml --project-directory . \
+#       up nautilus-flask       # Flask UI on :8000
+#   docker compose -f docker/docker-compose.yml --project-directory . \
+#       up nautilus-streamlit   # Streamlit UI on :8501
+#
+# See ../DOCKER.md for the full command reference (it's identical every
+# time, so define it once there rather than repeating it per command).
 
 services:
   nautilus:
-    build: .
+    build:
+      context: .
+      # Relative to `context` above (the project root via
+      # --project-directory), not relative to this compose file.
+      dockerfile: docker/Dockerfile
     image: nautilus-dev
     # Mount the source tree so code edits on the host are reflected
     # immediately without rebuilding the image. The raw NetCDF files and
     # .venv are irrelevant inside the container and are not excluded here
     # since the bind mount only affects what's visible at /app at runtime,
-    # not what gets built into the image (.dockerignore governs that).
+    # not what gets built into the image (../.dockerignore governs that -
+    # it deliberately stayed at the project root, see docker/Dockerfile).
     volumes:
       - .:/app
     working_dir: /app

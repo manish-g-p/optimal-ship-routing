@@ -6,6 +6,45 @@ file-level changes.
 
 ---
 
+## 2026-10-02 — Minor: organize Docker files into `docker/`
+
+Moved `Dockerfile` and `docker-compose.yml` into a new `docker/`
+directory (`git mv`, history preserved). `.dockerignore` deliberately
+stayed at the project root — Docker falls back to
+`<build-context-root>/.dockerignore` when no `docker/Dockerfile.dockerignore`
+exists, so this is the simplest way to guarantee (not just hope) that
+`.env` stays excluded from the build context after the move.
+
+The build context remains the project root in both workflows (`docker
+build -f docker/Dockerfile .`; compose via `--project-directory .`), so
+`COPY . .` and the `.:/app` bind mount are byte-identical to before —
+same files, same destinations. `docker-compose.yml` needed exactly one
+functional change: `build.dockerfile: docker/Dockerfile` (the Dockerfile
+moved, so this has to point at its new location). Volume mappings,
+`env_file`, ports, and service names are otherwise unchanged.
+
+Rewrote `DOCKER.md` into two clearly-separated workflows (manual `docker`
+commands vs. `docker compose`), both using the new paths, plus a note
+explaining why `.dockerignore` didn't move. Updated two generic
+"see Dockerfile" code comments (`config.py`, `server.py`) to
+"see docker/Dockerfile" for precision.
+
+**Validated with the real Docker engine:** build from the relocated
+Dockerfile; `.env`/`web_config.py` absence and a `docker history` secret
+scan on the resulting image (both clean, confirming `.dockerignore`
+still applies); `python -m src.evaluate` diffed byte-for-byte against
+the baseline (unchanged); manual `docker run --env-file .env -p
+8000:8000` reachable with the key correctly injected (length-checked,
+never printed); `docker compose ... config` with the project directory
+resolving every path identically to before (secret redacted before
+output); `docker compose ... run`/`up -d`/`logs`/`down` full lifecycle
+for both the evaluation and Flask services.
+
+No application, routing, ML, or UI code was touched beyond the two
+comment updates above.
+
+---
+
 ## 2026-10-01 — Loop 002: centralize and secure configuration/secrets
 
 **Added:**

@@ -108,11 +108,14 @@ definition — multi-algorithm, scenario-based, evidence-driven comparison.
 
 ### Implemented and working (added by Loop 001 — TASK-001)
 
-- **Docker development environment.** `Dockerfile` (python:3.12-slim base,
-  pinned dependencies), `.dockerignore`, and an optional `docker-compose.yml`
-  for bind-mounted local dev. Full details, exact commands, and what was
-  verified vs. assumed are in `DOCKER.md` at the repo root — not duplicated
-  here. (Loop 001 originally had the Dockerfile generate a secret-free
+- **Docker development environment.** `docker/Dockerfile` (python:3.12-slim
+  base, pinned dependencies) and an optional `docker/docker-compose.yml` for
+  bind-mounted local dev, both relocated into `docker/` in a later minor
+  reorg (current locations — originally at the repo root when Loop 001
+  created them). `.dockerignore` stays at the repo root deliberately (see
+  `DOCKER.md` for why). Full details, exact commands, and what was verified
+  vs. assumed are in `DOCKER.md` at the repo root — not duplicated here.
+  (Loop 001 originally had the Dockerfile generate a secret-free
   `web_config.py` stand-in at build time; **superseded by Loop 002** below —
   `web_config.py` no longer exists at all, so there's nothing to generate.)
 - **Pinned dependencies.** `requirements.txt` now pins all direct
