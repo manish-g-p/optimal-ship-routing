@@ -227,6 +227,83 @@ def router_factory(grid, vessel=None, model=None):
     return make
 
 
+class Voyage:
+    """A voyage that advances one step at a time (used by simulate() and by
+    interactive sessions, see sim_session.py).
+
+    Each step(): evaluate the active route (every eval_interval steps) under
+    the current router, maybe adopt an alternative, then advance
+    cells_per_step cells. Change the weather between steps with
+    set_router(); the next evaluation uses it.
+    """
+
+    def __init__(self, grid, start, goal, router, config=None):
+        self.cfg = config or RerouteConfig()
+        self.ctl = RerouteController(self.cfg, grid)
+        self.router = self.plan_router = router
+        active = router.search(start, goal, self.ctl.use_weather,
+                               self.ctl.use_heuristic)
+        if not active.found:
+            raise ValueError(f"no initial route from {start} to {goal}")
+        self.ctl.searched(0, (0, 0))
+        self.result = VoyageResult(initial_route=active, active_route=active,
+                                   track=[tuple(start)])
+        self.idx = 0                         # vessel = active.cells[idx]
+        self.step_no = 0                     # next step to run
+        self.weather_v = self.route_v = 0
+
+    @property
+    def active(self):
+        return self.result.active_route
+
+    @property
+    def position(self):
+        return tuple(self.active.cells[self.idx])
+
+    @property
+    def done(self):
+        return self.result.arrived
+
+    def remaining_cells(self):
+        return self.active.cells[self.idx:]
+
+    def set_router(self, router):
+        """New weather (cost/time model) from the next evaluation on."""
+        self.router = router
+        self.weather_v += 1
+
+    def step(self):
+        """Run one step. Returns (RerouteEvent or None, adopted: bool)."""
+        if self.done:
+            raise RuntimeError("voyage already arrived")
+        cfg, res, step = self.cfg, self.result, self.step_no
+        last = len(self.active.cells) - 1
+        ev, adopted = None, False
+        if cfg.enabled and step % cfg.eval_interval == 0 and self.idx < last:
+            ev, new = self.ctl.evaluate(step, self.active.cells[self.idx:],
+                                        self.router, self.plan_router,
+                                        (self.weather_v, self.route_v))
+            res.events.append(ev)
+            if new is not None:
+                res.active_route, self.idx = new, 0
+                last = len(new.cells) - 1
+                self.plan_router = self.router
+                self.route_v += 1
+                self.ctl.searched(step, (self.weather_v, self.route_v))
+                adopted = True
+        nxt = min(self.idx + cfg.cells_per_step, last)
+        leg = self.active.cells[self.idx:nxt + 1]
+        res.sailed_cost += self.router.path_cost(leg, self.ctl.use_weather)
+        res.sailed_km += self.router.path_cost(leg, False)
+        res.sailed_hours += self.router.path_hours(leg)
+        res.track.extend(tuple(c) for c in self.active.cells[self.idx + 1:nxt + 1])
+        self.idx = nxt
+        self.step_no = res.steps = step + 1
+        if self.idx == last:
+            res.arrived = True
+        return ev, adopted
+
+
 def simulate(grid, start, goal, weather, make_router, updates=None,
              config=None, max_steps=100_000):
     """Simulate a voyage from cell `start` to cell `goal`.
@@ -238,46 +315,15 @@ def simulate(grid, start, goal, weather, make_router, updates=None,
     Each step: apply that step's weather update, evaluate the active route
     (every eval_interval steps), then advance cells_per_step cells.
     """
-    cfg = config or RerouteConfig()
     updates = updates or {}
-    ctl = RerouteController(cfg, grid)
-    router = plan_router = make_router(weather)
-    active = router.search(start, goal, ctl.use_weather, ctl.use_heuristic)
-    if not active.found:
-        raise ValueError(f"no initial route from {start} to {goal}")
-
-    ctl.searched(0, (0, 0))
-    res = VoyageResult(initial_route=active, active_route=active,
-                       track=[tuple(start)])
-    idx = 0                                  # vessel = active.cells[idx]
-    weather_v = route_v = 0
-    last = len(active.cells) - 1
+    voyage = Voyage(grid, start, goal, make_router(weather), config)
     for step in range(max_steps):
         if step in updates:
-            router = make_router(updates[step])
-            weather_v += 1
-        if cfg.enabled and step % cfg.eval_interval == 0 and idx < last:
-            ev, new = ctl.evaluate(step, active.cells[idx:], router,
-                                   plan_router, (weather_v, route_v))
-            res.events.append(ev)
-            if new is not None:
-                active, idx, last = new, 0, len(new.cells) - 1
-                plan_router = router
-                route_v += 1
-                ctl.searched(step, (weather_v, route_v))
-        nxt = min(idx + cfg.cells_per_step, last)
-        leg = active.cells[idx:nxt + 1]
-        res.sailed_cost += router.path_cost(leg, ctl.use_weather)
-        res.sailed_km += router.path_cost(leg, False)
-        res.sailed_hours += router.path_hours(leg)
-        res.track.extend(tuple(c) for c in active.cells[idx + 1:nxt + 1])
-        idx = nxt
-        res.steps = step + 1
-        if idx == last:
-            res.arrived = True
+            voyage.set_router(make_router(updates[step]))
+        voyage.step()
+        if voyage.done:
             break
-    res.active_route = active
-    return res
+    return voyage.result
 
 
 # ----------------------------------------------------------------------

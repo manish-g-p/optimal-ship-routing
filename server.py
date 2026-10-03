@@ -8,10 +8,14 @@ Loads the routing engine ONCE at startup and exposes:
   POST /api/route        -> compute Dijkstra + weather-aware A* routes
   POST /api/simulate     -> simulated voyage with weather-driven rerouting
                             (vs. the same voyage without rerouting)
+  /api/sim/sessions...   -> interactive "Simulation lab" sessions (see the
+                            section below and src/sim_session.py)
 
 Run:  python server.py   (then open http://localhost:8000)
 """
+import functools
 import io
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -26,7 +30,7 @@ from dataclasses import asdict
 
 from src import (grid as G, weather as W, routing as R, ports as P,
                  vessel as V, ml_model as ML, live_weather as LW,
-                 rerouting as RR, weather_sim as WS)
+                 rerouting as RR, weather_sim as WS, sim_session as SS)
 
 WEB = Path(__file__).resolve().parent / "web"
 app = Flask(__name__)
@@ -164,8 +168,12 @@ def weather_image():
         w = get_weather(scenario)
     except Exception as e:
         return jsonify({"error": str(e)}), 502
-    swh = w.swh
-    vmax = max(0.5, float(np.nanpercentile(swh, 99)))
+    vmax = max(0.5, float(np.nanpercentile(w.swh, 99)))
+    return send_file(io.BytesIO(_swh_png(w.swh, vmax)), mimetype="image/png")
+
+
+def _swh_png(swh, vmax):
+    """Wave-height field -> semi-transparent PNG bytes (north at top)."""
     t = np.clip(swh / vmax, 0, 1)
     rgba = _TURBO(t)                                  # (nlat, nlon, 4)
     alpha = np.where((swh > 0.05) & GRID.navigable, 0.58, 0.0)
@@ -182,8 +190,7 @@ def weather_image():
     rgba = np.flipud(rgba)                            # north at top
     buf = io.BytesIO()
     mpimg.imsave(buf, rgba, format="png")
-    buf.seek(0)
-    return send_file(buf, mimetype="image/png")
+    return buf.getvalue()
 
 
 @app.route("/api/route", methods=["POST"])
@@ -347,6 +354,182 @@ def api_simulate():
                              if cmp.departure is not base else None),
         "weather_updates": changes,
     })
+
+
+# ----------------------------------------------------------------------
+# Interactive simulation sessions ("Simulation lab"). All simulation and
+# rerouting logic is in src/sim_session.py / src/rerouting.py; these
+# handlers only validate requests and shape responses.
+# ----------------------------------------------------------------------
+SESSIONS = SS.SessionStore()
+_log = logging.getLogger("nautilus")
+
+
+def sim_endpoint(fn):
+    """Map SessionError to its HTTP status; never expose internal errors."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except SS.SessionError as e:
+            return jsonify({"error": str(e)}), e.status
+        except Exception:
+            _log.exception("simulation lab request failed")
+            return jsonify({"error": "Internal simulation error - the session "
+                                     "may need a reset."}), 500
+    return wrapper
+
+
+def _json_body():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        raise SS.SessionError("Expected a JSON object.")
+    return body
+
+
+def _session_state(session):
+    st = session.state()
+    w = session.dyn.router.weather
+    base_p99 = float(np.nanpercentile(session.base.swh, 99))
+    st["weather"]["overlay"] = {
+        "url": f"/api/sim/sessions/{session.id}/weather_image?v={session.weather_version}",
+        "legend_max_m": round(max(0.5, base_p99,
+                                  float(w.swh[GRID.navigable].max())), 2),
+        "note": "Overlay shows the applied weather field (base + applied "
+                "disturbances); only wave height changes."}
+    st["simulated"] = True
+    return st
+
+
+@app.route("/api/sim/presets")
+def sim_presets():
+    return jsonify({"presets": [{"name": k, "description": v}
+                                for k, v in WS.PRESETS.items()],
+                    "limits": SS.LIMITS, "max_disturbances": SS.MAX_DISTURBANCES,
+                    "defaults": asdict(RR.RerouteConfig())})
+
+
+@app.route("/api/sim/sessions", methods=["POST"])
+@sim_endpoint
+def sim_create():
+    body = _json_body()
+    origin, dest = body.get("origin"), body.get("dest")
+    vessel_name = body.get("vessel", V.DEFAULT_VESSEL)
+    base_name = body.get("base_weather", "typical")
+    preset = body.get("preset", "none")
+    enabled = body.get("rerouting_enabled", True)
+    if origin not in P.PORTS or dest not in P.PORTS:
+        raise SS.SessionError("Unknown port.")
+    if origin == dest:
+        raise SS.SessionError("Origin and destination are the same.")
+    if vessel_name not in V.VESSELS:
+        raise SS.SessionError("Unknown vessel.")
+    if base_name not in SIM_BASE_WEATHER:
+        raise SS.SessionError("Initial sea state must be one of "
+                              f"{', '.join(SIM_BASE_WEATHER)} (live weather is not "
+                              "used in simulations).")
+    if preset not in WS.PRESETS:
+        raise SS.SessionError(f"Unknown demonstration scenario {preset!r}.")
+    if not isinstance(enabled, bool):
+        raise SS.SessionError("rerouting_enabled must be true or false.")
+    try:
+        cfg = RR.config_from_dict(body.get("config"))
+    except (ValueError, AttributeError) as e:
+        raise SS.SessionError(f"Invalid rerouting settings: {e}") from None
+
+    ves = V.get(vessel_name)
+    base = get_weather(base_name)
+    mult = get_multiplier(base_name, vessel_name, base)          # cached
+    base_router = R.Router(GRID, weather=base, mult_dir=mult,
+                           speed_kn=ves.service_speed_kn, time_mult=mult)
+    setup = {"origin": origin, "dest": dest, "vessel": vessel_name,
+             "base_weather": base_name, "preset": preset,
+             "rerouting_enabled": enabled,
+             "start": GRID.nearest_cell(*P.coord(origin)),
+             "goal": GRID.nearest_cell(*P.coord(dest))}
+    session = SESSIONS.create(lambda sid: SS.SimSession(
+        sid, GRID, base, base_router, sim_router_factory(vessel_name), setup, cfg))
+    return jsonify(_session_state(session)), 201
+
+
+def _with_session(sid, action):
+    session = SESSIONS.get(sid)
+    if not session.lock.acquire(blocking=False):
+        raise SS.Conflict("Session is busy with another operation - try again.")
+    try:
+        action(session)
+        return jsonify(_session_state(session))
+    finally:
+        session.lock.release()
+
+
+@app.route("/api/sim/sessions/<sid>", methods=["GET"])
+@sim_endpoint
+def sim_get(sid):
+    return _with_session(sid, lambda s: None)
+
+
+@app.route("/api/sim/sessions/<sid>", methods=["DELETE"])
+@sim_endpoint
+def sim_delete(sid):
+    SESSIONS.delete(sid)
+    return jsonify({"deleted": sid})
+
+
+@app.route("/api/sim/sessions/<sid>/step", methods=["POST"])
+@sim_endpoint
+def sim_step(sid):
+    expected = _json_body().get("expected_step")
+    if isinstance(expected, bool) or not isinstance(expected, int):
+        raise SS.SessionError("expected_step (integer) is required.")
+    return _with_session(sid, lambda s: s.advance(expected))
+
+
+@app.route("/api/sim/sessions/<sid>/weather", methods=["POST"])
+@sim_endpoint
+def sim_weather(sid):
+    items = _json_body().get("disturbances")
+    return _with_session(sid, lambda s: s.set_draft(items))
+
+
+@app.route("/api/sim/sessions/<sid>/weather/apply", methods=["POST"])
+@sim_endpoint
+def sim_weather_apply(sid):
+    return _with_session(sid, lambda s: s.apply_pending())
+
+
+@app.route("/api/sim/sessions/<sid>/weather/discard", methods=["POST"])
+@sim_endpoint
+def sim_weather_discard(sid):
+    return _with_session(sid, lambda s: s.discard_pending())
+
+
+@app.route("/api/sim/sessions/<sid>/schedule/cancel", methods=["POST"])
+@sim_endpoint
+def sim_cancel_schedule(sid):
+    return _with_session(sid, lambda s: s.cancel_schedule())
+
+
+@app.route("/api/sim/sessions/<sid>/reset", methods=["POST"])
+@sim_endpoint
+def sim_reset(sid):
+    return _with_session(sid, lambda s: s.reset())
+
+
+@app.route("/api/sim/sessions/<sid>/weather_image")
+@sim_endpoint
+def sim_weather_image(sid):
+    session = SESSIONS.get(sid)
+    version, w = session.weather_snapshot          # no session lock: steps go on
+    with session.image_lock:
+        if session._png is None or session._png[0] != version:
+            vmax = max(0.5, float(np.nanpercentile(session.base.swh, 99)),
+                       float(w.swh[GRID.navigable].max()))
+            session._png = (version, _swh_png(w.swh, vmax))
+        png = session._png[1]
+    resp = send_file(io.BytesIO(png), mimetype="image/png")
+    resp.headers["Cache-Control"] = "private, max-age=3600"   # URL is versioned
+    return resp
 
 
 if __name__ == "__main__":
