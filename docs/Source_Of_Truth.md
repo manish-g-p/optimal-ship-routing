@@ -642,9 +642,10 @@ The following limitations should be considered during implementation.
 
 ### Dynamic Routing
 
-* The existing system does not yet provide a complete dynamic rerouting loop.
-* Current-position route generation needs to be verified.
-* Simulated vessel movement and route progress need to be integrated with rerouting.
+* Current-position route generation is implemented and tested (`Router.search` from any navigable cell, `RouteResult.cost`, `Router.path_cost`).
+* A threshold-based rerouting loop runs in simulation only (`src/rerouting.py`, `src/weather_sim.py`, `python -m src.rerouting`): weather updates are synthetic wave-height perturbations, and vessel progress is a fixed number of grid cells per step, not time-based.
+* Rerouting decisions compare routing cost (km × weather/ML speed multiplier). The `time_hours` reported by `RouteResult` is still distance at a constant 18 kn and is not used for rerouting decisions.
+* Rerouting is not yet exposed in the Flask or Streamlit interfaces.
 
 ### Machine Learning
 

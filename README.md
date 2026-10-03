@@ -171,6 +171,19 @@ python -m src.ml_model
 
 The trained model is written to `data/processed/speed_model.joblib`.
 
+### Dynamic rerouting simulation
+
+```bash
+python -m src.rerouting
+```
+
+Simulates a voyage (Cochin to Dubai by default) under several synthetic weather
+scenarios. A vessel advances along its route, weather updates are applied, and
+a threshold-based controller decides whether to switch to an alternative from
+the vessel's current position. Each scenario is compared against a static
+voyage with no rerouting. Thresholds are the `REROUTE_*` settings in
+`config.py`.
+
 ### Tests
 
 ```bash
@@ -178,7 +191,8 @@ python -m unittest discover -s tests -v
 ```
 
 The routing tests use the committed `data/processed/` artifacts. They check the
-initial evaluation routes and rerouting from a vessel's current position.
+initial evaluation routes, rerouting from a vessel's current position, and
+the dynamic rerouting scenarios.
 
 ## Repository Contents
 
@@ -195,6 +209,8 @@ src/weather.py            Processed weather loading
 src/live_weather.py       Optional live weather support
 src/ml_model.py           Speed-model training and inference
 src/evaluate.py           Route comparison and metrics
+src/rerouting.py          Rerouting controller and voyage simulation
+src/weather_sim.py        Synthetic weather updates for rerouting scenarios
 src/ports.py              Port catalogue and coordinates
 src/vessel.py             Vessel profiles
 tests/                    Routing and rerouting tests (unittest)
