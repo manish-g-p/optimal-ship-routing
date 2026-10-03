@@ -27,9 +27,13 @@ Decision per evaluation (every `eval_interval` steps):
   6. Adopt it only if it is >= min_gain cheaper (relative) AND
      >= min_gain_abs cheaper (absolute); otherwise keep the route.
 
+compare_voyage() runs one scenario twice - with rerouting and with it
+disabled (static voyage) - and is what the CLI and the Flask API use.
+
 Run the scenario evaluation:  python -m src.rerouting
 """
-from dataclasses import dataclass, field
+import math
+from dataclasses import dataclass, field, fields
 
 import config as C
 from src import routing as R
@@ -49,6 +53,31 @@ class RerouteConfig:
     recheck_steps: int = C.REROUTE_RECHECK_STEPS
     min_gain: float = C.REROUTE_MIN_GAIN
     min_gain_abs: float = C.REROUTE_MIN_GAIN_ABS
+
+
+# RerouteConfig fields a caller (e.g. the web API) may override, with the
+# smallest allowed value. Floats unless the default is an int.
+_TUNABLE = {"cells_per_step": 1, "eval_interval": 1, "cooldown_steps": 0,
+            "swh_trigger_m": 0.0, "cost_trigger": 0.0, "recheck_steps": 0,
+            "min_gain": 0.0, "min_gain_abs": 0.0}
+
+
+def config_from_dict(overrides=None):
+    """RerouteConfig with validated overrides; ValueError on unknown keys,
+    wrong types or out-of-range values."""
+    cfg = RerouteConfig()
+    for key, val in (overrides or {}).items():
+        if key not in _TUNABLE:
+            raise ValueError(f"unknown rerouting setting {key!r}")
+        want_int = isinstance(getattr(cfg, key), int)
+        if isinstance(val, bool) or not isinstance(val, (int, float)) \
+                or not math.isfinite(val) \
+                or (want_int and not float(val).is_integer()):
+            raise ValueError(f"{key} must be {'an integer' if want_int else 'a number'}")
+        if val < _TUNABLE[key]:
+            raise ValueError(f"{key} must be >= {_TUNABLE[key]}")
+        setattr(cfg, key, int(val) if want_int else float(val))
+    return cfg
 
 
 @dataclass
@@ -160,6 +189,7 @@ class VoyageResult:
     events: list = field(default_factory=list)  # RerouteEvent per evaluation
     sailed_cost: float = 0.0  # cost of the track, each leg under the weather
                               # in force when it was sailed
+    sailed_km: float = 0.0    # distance of the track
     steps: int = 0
     arrived: bool = False
 
@@ -220,7 +250,9 @@ def simulate(grid, start, goal, weather, make_router, updates=None,
                 route_v += 1
                 ctl.searched(step, (weather_v, route_v))
         nxt = min(idx + cfg.cells_per_step, last)
-        res.sailed_cost += router.path_cost(active.cells[idx:nxt + 1], ctl.use_weather)
+        leg = active.cells[idx:nxt + 1]
+        res.sailed_cost += router.path_cost(leg, ctl.use_weather)
+        res.sailed_km += router.path_cost(leg, False)
         res.track.extend(tuple(c) for c in active.cells[idx + 1:nxt + 1])
         idx = nxt
         res.steps = step + 1
@@ -234,6 +266,48 @@ def simulate(grid, start, goal, weather, make_router, updates=None,
 # ----------------------------------------------------------------------
 # Scenario evaluation: dynamic vs static voyage under the same weather
 # ----------------------------------------------------------------------
+def cost_hours(cost, vessel):
+    """Hours for a cost from the ML cost model (km at service speed).
+    Not meaningful for the analytic wave multiplier."""
+    return cost / (vessel.service_speed_kn * 1.852)
+
+
+@dataclass
+class VoyageComparison:
+    scenario: str
+    departure: object         # Weather at departure
+    updates: dict             # {step: Weather} applied during the voyage
+    dynamic: VoyageResult     # with rerouting (given config)
+    static: VoyageResult      # same weather, rerouting disabled
+
+
+def compare_voyage(grid, start, goal, base, make_router, scenario,
+                   config=None):
+    """Run weather scenario `scenario` (see weather_sim.SCENARIOS) from
+    `base` weather with rerouting, and again with rerouting disabled.
+    Cost models are built once per weather field and shared by both runs."""
+    from src import weather_sim as WS
+    routers = {}                             # id(weather) -> (weather, Router)
+
+    def make(weather):
+        if id(weather) not in routers:
+            routers[id(weather)] = (weather, make_router(weather))
+        return routers[id(weather)][1]
+
+    cfg = config or RerouteConfig()
+    plan = make(base).search(start, goal, *ALGORITHMS[cfg.algorithm])
+    if not plan.found:
+        raise ValueError(f"no route from {start} to {goal}")
+    depart, updates = WS.scenario(scenario, grid, base, plan)
+    static_cfg = RerouteConfig(**{f.name: getattr(cfg, f.name)
+                                  for f in fields(cfg)})
+    static_cfg.enabled = False
+    return VoyageComparison(
+        scenario, depart, updates,
+        simulate(grid, start, goal, depart, make, updates, cfg),
+        simulate(grid, start, goal, depart, make, updates, static_cfg))
+
+
 def run(origin="Cochin (Kerala)", dest="Dubai / Jebel Ali (UAE)",
         base_scenario="typical", vessel_name="General Cargo"):
     import warnings
@@ -249,16 +323,14 @@ def run(origin="Cochin (Kerala)", dest="Dubai / Jebel Ali (UAE)",
     make = router_factory(grid, vessel, model)
     s = grid.nearest_cell(*P.coord(origin))
     g = grid.nearest_cell(*P.coord(dest))
-    initial = make(base).search(s, g, True, True)
     kmh = vessel.service_speed_kn * 1.852    # ML cost / kmh = hours
 
     print(f"\n=== Dynamic rerouting: {origin} -> {dest} ===")
     print(f"Base weather: {base_scenario} | Vessel: {vessel_name} | "
           f"cost = km x ML speed multiplier (hours = cost / {kmh:.1f} km/h)\n")
     for name in WS.SCENARIOS:
-        depart, updates = WS.scenario(name, grid, base, initial)
-        dyn = simulate(grid, s, g, depart, make, updates)
-        sta = simulate(grid, s, g, depart, make, updates, RerouteConfig(enabled=False))
+        cmp = compare_voyage(grid, s, g, base, make, name)
+        dyn, sta = cmp.dynamic, cmp.static
         saved = sta.sailed_cost - dyn.sailed_cost
         print(f"[{name}] reroutes={len(dyn.reroutes)} arrived={dyn.arrived} | "
               f"static {sta.sailed_cost / kmh:.1f} h -> dynamic "

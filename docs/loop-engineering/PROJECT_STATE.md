@@ -1,7 +1,8 @@
 # Project State
 
-**Last updated:** 2026-10-03 (Loop 005 — documentation synchronization)
-**Branch / commit verified:** `feature/dynamic-routing` @ `e8f68d1`
+**Last updated:** 2026-10-03 (Loop 006 — rerouting in the Flask UI)
+**Branch / commit verified:** `feature/dynamic-routing`, working tree on
+top of `095bd0b` (Loop 006 changes not yet committed when written)
 
 What is actually true in the repository now — verified against the code
 and test runs, not taken from other documents. Project direction and
@@ -28,7 +29,7 @@ sake are out of scope.
 | 1 — Rerouting foundation | **Done**, except "verify ETA and cost consistency" (open, see Limitations) |
 | 2 — Weather updates and rerouting triggers | **Done (simulation only)** — Loop 004 |
 | 3 — ML speed prediction integration | **Next, proposed** — not started, awaiting confirmation (see `TASKS.md`) |
-| 4 — Evaluation and visualization | Not started (a console scenario evaluation exists; no UI) |
+| 4 — Evaluation and visualization | **Partly done** — simulation viewable in the Flask UI (Loop 006); multi-voyage/vessel static-vs-dynamic evaluation not done |
 | 5 — Experimental ML rerouting decisions | Not started; optional |
 
 ## Implemented and verified
@@ -86,8 +87,17 @@ Dijkstra vs. A*+ML under `rough` weather, writes
 `data/processed/evaluation.csv` (committed baseline, unchanged by Loops
 003–004).
 
-**Interfaces (pre-existing)** — Flask (`server.py` + `web/`, Google Maps,
-JSON API) and Streamlit (`app.py`). Neither exposes rerouting yet.
+**Interfaces** — Flask (`server.py` + `web/`, Google Maps, JSON API) and
+Streamlit (`app.py`), both pre-existing. Since Loop 006 the Flask app
+has a **"Voyage simulation" mode**, backed by `POST /api/simulate`, which calls
+`rerouting.compare_voyage`. It takes ports, vessel, Typical/Rough base
+weather, a `weather_sim` scenario and optional `RerouteConfig` overrides
+(validated by `rerouting.config_from_dict`). It returns the initial plan, the
+sailed track, the final route, dynamic and static voyage metrics, the
+rerouting evaluations that had a trigger, and the simulated weather-change
+locations. The UI draws these with a step slider. It always uses the ML speed
+cost model, and live weather is rejected. `/api/meta` gained a `simulation`
+key; `/api/route` is unchanged. Streamlit does not expose rerouting.
 
 **Infrastructure (pre-existing)** — `docker/Dockerfile`,
 `docker/docker-compose.yml`, root `.dockerignore`, `DOCKER.md`; pinned
@@ -99,16 +109,18 @@ and the rerouting simulation run with `--network none` (verified, see
 **Tests** — `tests/` (stdlib `unittest`, committed data, no network):
 `test_routing.py` (8 tests: initial-route regression, cost, rerouting
 from intermediate/off-route positions, invalid positions) and
-`test_rerouting.py` (15 tests: scenarios A–E). 23 tests pass at
-`e8f68d1` (re-run in Loop 005).
+`test_rerouting.py` (15 tests: scenarios A–E) and `test_server.py`
+(8 tests: `/api/meta`, `/api/route` unchanged, `/api/simulate` success,
+stable, reroute, config, failed alternative, invalid input). 31 tests
+pass (Loop 006).
 
 ## Planned (not implemented)
 
 - Phase 3: consistent ML-based travel time (ETA aligned with routing
   cost), behavior across vessel profiles. The ML model is already used
   in costs; ETA is not.
-- Phase 4: static-vs-dynamic evaluation across the fixed voyage set and
-  vessels; rerouting visualization in the existing UI.
+- Phase 4 remainder: static-vs-dynamic evaluation across the fixed
+  voyage set and vessel profiles (the UI part is done).
 - Phase 5 (optional): ML rerouting-decision experiment vs. the
   threshold baseline.
 
@@ -131,6 +143,10 @@ in the current roadmap. See `TASKS.md` → Historical tasks.
 - Rerouting is simulation-only: synthetic `swh`-only perturbations,
   movement in fixed cells per step (not time-based), thresholds and
   scenarios tuned on one voyage (Cochin → Dubai, General Cargo).
+- UI simulation: the wave overlay shows the base weather, not the
+  simulated storms (those are drawn as circles at the peak change); one
+  request runs the voyage twice and can take several seconds (≈4 s for
+  `adverse`, measured); not in Streamlit.
 - ML model is trained on synthetic data; pickle written with
   scikit-learn 1.8.0 and loaded under 1.9.0 (warning, no observed effect).
 
@@ -145,7 +161,7 @@ in the current roadmap. See `TASKS.md` → Historical tasks.
 | `python run_all.py` | preprocess (if needed) → train (if needed) → evaluate. |
 | `python -m src.rerouting` | Dynamic-rerouting scenarios, dynamic vs. static voyage. |
 | `python -m unittest discover -s tests -v` | Test suite (~45 s). |
-| `python server.py` | Flask UI/API on port 8000 (Maps key optional, via `.env`). |
+| `python server.py` | Flask UI/API on port 8000 (Maps key optional, via `.env`); route planning and voyage simulation modes. |
 | `streamlit run app.py` | Streamlit UI on port 8501. |
 
 All of these also run in the `nautilus-dev` Docker image; see `DOCKER.md`.

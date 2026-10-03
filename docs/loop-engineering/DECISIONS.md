@@ -22,6 +22,7 @@ current Source of Truth (2026-10-03).
 | 007 | Threshold-based rerouting controller rules | **Confirmed** (baseline) |
 | 008 | Simulation model: route-cell position, deterministic `swh` perturbations, ML cost by default | **Confirmed** (prototype) |
 | 009 | Tests use stdlib `unittest` and committed data | **Confirmed** |
+| 010 | Rerouting UI: Flask only, via `/api/simulate`; logic stays in `src/` | **Confirmed** |
 
 ---
 
@@ -182,6 +183,26 @@ transparent baseline that any ML decision model (Phase 5) must beat.
 `python -m unittest discover -s tests`, using committed
 `data/processed/` artifacts. No pytest dependency was added (none existed
 and the brief said to avoid new dependencies).
+
+## Decision 010 — Rerouting in the interface — CONFIRMED
+
+**Decision (Loop 006):**
+
+- Integrate into the **Flask** app only: it is the main interface, and its
+  JSON API can be tested with Flask's test client. Streamlit is
+  not integrated (the smallest change that fits the brief).
+- New endpoint `POST /api/simulate`; existing endpoints unchanged apart
+  from an added `simulation` key in `/api/meta`.
+- Voyage execution, dynamic/static comparison, config validation and
+  cost→hours conversion live in `src/rerouting.py`; the weather-change
+  location helper lives in `src/weather_sim.py`. `server.py` only
+  validates the request and shapes JSON; `web/app.js` only draws it.
+- The simulation always uses the ML speed cost model, so reported hours =
+  cost ÷ (service kn × 1.852) are consistent with the decisions.
+  `RouteResult.time_hours` is not shown for simulated voyages.
+- Live weather is rejected for simulations (offline, deterministic).
+- Every simulated figure is labeled "simulated"/"model", and the response
+  carries a note that it is not real-world performance.
 
 ---
 

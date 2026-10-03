@@ -27,6 +27,16 @@ def perturb_waves(weather, grid, center_latlon, radius_km, delta_m):
     return Weather(swh, weather.mwp, weather.mwd_cos, weather.mwd_sin)
 
 
+def peak_change(base, updated, grid):
+    """(lat, lon, delta_m) of the largest wave-height increase from `base`
+    to `updated` (or the largest decrease if waves only dropped) - a simple
+    way to show where a simulated update happened."""
+    diff = updated.swh - base.swh
+    flat = int(np.argmax(diff)) if diff.max() > 0.05 else int(np.argmin(diff))
+    r, c = np.unravel_index(flat, diff.shape)
+    return float(grid.lats[r]), float(grid.lons[c]), float(diff[r, c])
+
+
 def _point_on(route, frac):
     """(lat, lon) of the cell `frac` of the way along a route."""
     return route.latlon[int((len(route.cells) - 1) * frac)]

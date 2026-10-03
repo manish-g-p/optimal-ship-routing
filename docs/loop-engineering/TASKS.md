@@ -11,8 +11,8 @@ Status values: `DONE`, `NEXT` (proposed or confirmed), `BACKLOG`,
 
 ## Current goal
 
-None in progress. The last implementation goal (weather-driven dynamic
-rerouting, Loop 004) is `DONE`.
+None in progress. The last implementation goal (dynamic rerouting in the
+Flask interface, Loop 006) is `DONE`.
 
 ## Next goal — `NEXT` (proposed, needs user confirmation)
 
@@ -32,13 +32,30 @@ cost. Proposed scope, to be confirmed:
 - Check behavior across all five vessel profiles.
 - Document model limitations (synthetic training data, pickle skew).
 
-This was **not** decided by the user; it is the roadmap's next step. If
-the user prefers Phase 4 (evaluation and UI visualization of rerouting)
-first, that is equally consistent with the Source of Truth.
+This was **not** decided by the user; it is the roadmap's next step.
+After Loop 005 the user chose the UI part of Phase 4 instead (Loop 006),
+so this proposal still awaits confirmation. The alternative is the rest of
+Phase 4: static-vs-dynamic evaluation across the fixed voyage set and
+vessel profiles.
 
 ---
 
 ## Completed goals
+
+### Dynamic rerouting in the application interface (part of Phase 4) — `DONE`
+
+Loop 006, 2026-10-03 (uncommitted when written). The Flask app has a
+"Voyage simulation" mode and `POST /api/simulate`. The user picks ports,
+vessel, base weather, weather change and rerouting settings. They see the
+initial plan, the sailed track, reroute points, weather-change locations
+and vessel progress (slider). They can inspect each rerouting evaluation's
+triggers and reason, and compare with the same voyage without rerouting.
+The logic stays in `src/rerouting.py` (`compare_voyage`,
+`config_from_dict`, `cost_hours`) and `src/weather_sim.py` (`peak_change`).
+Flask only validates input and shapes JSON. Evidence:
+`tests/test_server.py`, `VALIDATION.md` → Loop 006 (including a headless
+browser check), `EXPERIMENTS.md` EXP-004. Not done: Streamlit
+integration (`DECISIONS.md` D010).
 
 ### Weather-driven dynamic rerouting (Source of Truth Phase 2) — `DONE`
 
@@ -79,7 +96,7 @@ into the next goal.
 | 1 — Rerouting foundation | `DONE` except ETA/cost consistency |
 | 2 — Weather updates and rerouting triggers | `DONE` (simulation) |
 | 3 — ML speed prediction integration | `NEXT` (proposed) |
-| 4 — Evaluation and visualization | `BACKLOG` |
+| 4 — Evaluation and visualization | Partly `DONE` (UI, Loop 006); multi-voyage evaluation `BACKLOG` |
 | 5 — Experimental ML rerouting decisions | `BACKLOG` (optional) |
 
 ---

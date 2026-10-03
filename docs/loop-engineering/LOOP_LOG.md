@@ -9,6 +9,36 @@ task: TASK-002" are historical; see `README.md`.
 
 ---
 
+## Loop 006 — Dynamic rerouting in the application interface
+
+**Date:** 2026-10-03
+**Branch / commit:** `feature/dynamic-routing`, on top of `095bd0b`
+(uncommitted when written)
+**Task:** User-directed: make the voyage simulation usable through the
+existing interface (part of Source of Truth Phase 4).
+
+**What was done:** Inspected `server.py`, `web/` and `app.py`. Chose
+Flask only (Decision 010). Added `compare_voyage`, `config_from_dict`,
+`cost_hours` and `VoyageResult.sailed_km` to `src/rerouting.py`, and moved
+the CLI onto `compare_voyage`. Added `peak_change` to `src/weather_sim.py`.
+Added `POST /api/simulate` plus a `simulation` key in `/api/meta`. Added a
+mode switch, simulation controls and a simulation map/panel to `web/`.
+Added `tests/test_server.py`. During validation: rejected non-finite
+config values (JSON `NaN` would have disabled adoption silently); made
+weather-change markers prefer the largest increase (otherwise `shifting`
+showed some updates as "clearing"); capped the results panel above the
+wave legend.
+
+**Validation:** `VALIDATION.md` → Loop 006; measurements in EXP-004.
+
+**Decision:** Goal done. Phase 4 is partly done (UI); the multi-voyage
+static-vs-dynamic evaluation remains.
+
+**Next:** Still awaiting user confirmation. Phase 3 (ETA/cost
+consistency) is proposed; the Phase 4 remainder is the alternative.
+
+---
+
 ## Loop 005 — Documentation synchronization
 
 **Date:** 2026-10-03

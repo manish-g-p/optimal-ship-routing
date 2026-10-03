@@ -70,8 +70,9 @@ docker run --rm nautilus-dev python run_all.py
 Both run fully offline — add `--network none` yourself to confirm no
 network access is used at all.
 
-**Run the tests and the dynamic-rerouting scenarios** (verified offline
-at `e8f68d1`, see `docs/loop-engineering/VALIDATION.md`):
+**Run the tests and the dynamic-rerouting scenarios** (verified offline;
+see `docs/loop-engineering/VALIDATION.md`). The voyage simulation is also in
+the Flask UI (`python server.py`, "Voyage simulation" mode):
 
 ```bash
 docker run --rm --network none nautilus-dev python -m unittest discover -s tests

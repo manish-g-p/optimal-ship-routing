@@ -3,7 +3,7 @@
 **Project:** Nautilus
 **Category:** ML-Assisted Dynamic Ship Routing System
 **Primary Focus:** Weather-Aware Rerouting and Machine Learning
-**Status (2026-10-03):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented. Next: route cost/ETA consistency and ML speed integration (Phase 3, proposed). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
+**Status (2026-10-03):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented, and the simulation can be run and inspected in the Flask UI. Next: route cost/ETA consistency and ML speed integration (Phase 3, proposed). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
 
 ---
 
@@ -205,7 +205,8 @@ As of 2026-10-03:
 
 * **Current-position rerouting:** `Router.search` routes from any navigable grid cell; invalid or non-navigable start/goal cells raise an error; `RouteResult.cost` and `Router.path_cost` expose the routing cost for comparisons.
 * **Threshold-based dynamic rerouting (simulation):** `src/weather_sim.py` (deterministic simulated weather updates) and `src/rerouting.py` (vessel progress along the active route, remaining-route evaluation, configurable triggers, cooldown, improvement thresholds, rerouting event log). Defaults are the `REROUTE_*` settings in `config.py`. Run it with `python -m src.rerouting`.
-* Not yet implemented: ETA derived from the routing cost (§10), rerouting in the UI (§12), static-vs-dynamic evaluation across the fixed voyage set, and ML rerouting decisions (§8.2).
+* **Flask UI integration:** "Voyage simulation" mode and `POST /api/simulate` run a voyage with and without rerouting. They show the initial plan, the sailed track, reroute points, weather changes, a progress slider, and each rerouting evaluation with its reason. The Streamlit app does not include it.
+* Not yet implemented: ETA derived from the routing cost (§10), static-vs-dynamic evaluation across the fixed voyage set and vessel profiles, and ML rerouting decisions (§8.2).
 
 ---
 
@@ -737,7 +738,7 @@ Tasks:
 
 ### Phase 4 — Evaluation and Visualization
 
-**Status:** Not started. A console scenario evaluation (`python -m src.rerouting`) exists; no UI integration yet.
+**Status:** Partly done (2026-10-03). A console scenario evaluation (`python -m src.rerouting`) exists, and simulated voyages and route changes can be shown in the Flask UI. Not yet done: extending the fixed voyage evaluation to static-vs-dynamic comparisons across voyages and vessels.
 
 **Objective:** Demonstrate and measure the rerouting workflow.
 

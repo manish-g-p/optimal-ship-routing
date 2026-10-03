@@ -8,7 +8,7 @@ written or a command ran once without error.
 Standard checks for routing/rerouting changes:
 
 ```bash
-python -m unittest discover -s tests -v          # 23 tests at e8f68d1, ~45 s
+python -m unittest discover -s tests -v          # 31 tests (Loop 006), ~60 s
 python -m src.rerouting                          # scenario table (EXP-003)
 python -m src.evaluate                           # then diff evaluation.csv vs. the committed
                                                  # file excluding trad_sec/prop_sec; restore it
@@ -38,6 +38,41 @@ Not started. Record here: the checks run, their actual outcomes, and the
 before/after `time_hours` vs. cost-derived time on the fixed voyages.
 
 ---
+
+## Loop 006 — rerouting in the Flask UI (checks run in this loop)
+
+- [x] `python -m unittest discover -s tests -v` (host): **Ran 31 tests in
+      60.3 s — OK** (8 routing, 15 rerouting, 8 new API tests in
+      `test_server.py`). A first full run (61.6 s, 31 OK) happened before
+      the non-finite-value check and the `peak_change` refinement; the
+      60.3 s run is on the final code.
+- [x] `python -m src.rerouting` after moving the CLI onto
+      `compare_voyage`: scenario table identical to EXP-003.
+- [x] API checks in `test_server.py`: `/api/route` output unchanged
+      (2953.6 / 2954.9 km, same keys); `/api/simulate` success, stable (no
+      events, dynamic = static), reroute (adopted at step 2, track position
+      = event position = start of final route), config applied, injected
+      failed search (`failed` event, route kept), 12 invalid-input cases
+      → HTTP 400.
+- [x] Headless Chromium (Playwright's cached build; NSS libraries
+      unpacked into the scratchpad with `apt-get download`, nothing
+      installed system-wide) against `python server.py` on port 8000 with
+      the real Maps key. The script drove the UI: simulation mode,
+      `adverse` run, cards/verdict/events rendered, slider step 2 put the
+      vessel exactly on the reroute position, last step "arrived";
+      `shifting` with cooldown 6 → 3 reroutes; negative min-gain → error
+      toast; switching back to route planning cleared the map, and
+      **Find optimal route** rendered the usual Dijkstra/A* cards.
+      Screenshots reviewed. Console: only a pre-existing favicon 404, the
+      deliberate 400, and Google's `Marker` deprecation notice (C9). The
+      run was repeated after the final CSS/`peak_change` changes, with the
+      same results.
+- [x] Docker: image rebuilt from the working tree; `--network none` test
+      run **Ran 31 tests in 68.3 s — OK**; container started with
+      `-p 18000:8000`, and `POST /api/simulate` (General Cargo, adverse)
+      returned 103.3 h vs 127.7 h, 1 reroute; `POST /api/route` returned
+      2953.6 / 2954.9 km.
+- [x] `node --check web/app.js`: syntax OK.
 
 ## Loop 005 — documentation synchronization (checks run in this loop)
 

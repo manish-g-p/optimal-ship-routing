@@ -72,6 +72,7 @@ async function loadMeta() {
   osel.value = "Cochin (Kerala)";
   dsel.value = "Dubai / Jebel Ali (UAE)";
   updateVesselInfo();
+  initSimControls();
 }
 
 function updateVesselInfo() {
@@ -95,6 +96,10 @@ function bindUI() {
     if (waveOverlay) waveOverlay.setMap($("use-waves").checked ? map : null);
   });
   $("go").addEventListener("click", findRoute);
+  document.querySelectorAll("#mode button").forEach((b) => {
+    b.addEventListener("click", () => setMode(b.dataset.val));
+  });
+  $("simulate").addEventListener("click", runSimulation);
 }
 
 async function loadWeather() {
@@ -318,6 +323,8 @@ function card(name, tag, cls, res) {
 }
 
 function renderCards(d) {
+  $("results-title").textContent = "Route comparison";
+  $("sim-extra").classList.add("hidden");
   let html = "";
   if (d.dijkstra) html += card("Dijkstra", "traditional", "dijkstra", d.dijkstra);
   if (d.astar) html += card("Weather-aware A*", "proposed", "astar", d.astar);
@@ -339,4 +346,215 @@ function renderCards(d) {
   }
   $("verdict").textContent = verdict;
   $("results").classList.remove("hidden");
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Voyage simulation mode (POST /api/simulate)                         */
+/* All rerouting logic runs on the server (src/rerouting.py); this     */
+/* code only collects inputs and draws the returned voyage.            */
+/* ------------------------------------------------------------------ */
+let mode = "route", vesselMarker = null, simData = null;
+
+const SIM_SCENARIOS = {
+  stable: "No weather change (control)",
+  adverse: "Severe storm appears on the route ahead",
+  worsening: "Storm on the route ahead intensifies",
+  improving_alt: "Storm blocking the direct path clears",
+  minor: "Small, weak disturbance on the route",
+  shifting: "Storm moves every step (tests cooldown)",
+};
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function initSimControls() {
+  const sim = META.simulation;
+  const sel = $("sim-scenario");
+  sim.scenarios.forEach((n) => sel.add(new Option(SIM_SCENARIOS[n] || n, n)));
+  sel.value = "adverse";
+  const d = sim.defaults;
+  $("cfg-cooldown").value = d.cooldown_steps;
+  $("cfg-gain").value = +(100 * d.min_gain).toFixed(2);
+  $("cfg-swh").value = d.swh_trigger_m;
+  $("cfg-hint").textContent =
+    `1 step = ${d.cells_per_step} grid cells (≈${Math.round(d.cells_per_step * 5.5)} km). ` +
+    `Also requires ≥ ${d.min_gain_abs} cost units of gain.`;
+}
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll("#mode button").forEach((x) =>
+    x.classList.toggle("active", x.dataset.val === m));
+  document.querySelectorAll(".mode-route").forEach((e) =>
+    e.classList.toggle("hidden", m !== "route"));
+  document.querySelectorAll(".mode-sim").forEach((e) =>
+    e.classList.toggle("hidden", m !== "sim"));
+  clearRoutes();
+  $("results").classList.add("hidden");
+}
+
+async function runSimulation() {
+  if (scenario === "live")
+    return toast("Voyage simulation uses offline weather: pick Typical or Rough.");
+  if ($("origin").value === $("dest").value)
+    return toast("Origin and destination are the same.");
+  const num = (id) => Number($(id).value);
+  loading(true, "Simulating voyage (with and without rerouting)…");
+  try {
+    const r = await fetch("/api/simulate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        origin: $("origin").value, dest: $("dest").value,
+        vessel: $("vessel").value, base_weather: scenario,
+        scenario: $("sim-scenario").value,
+        config: { cooldown_steps: num("cfg-cooldown"),
+                  min_gain: num("cfg-gain") / 100,
+                  swh_trigger_m: num("cfg-swh") },
+      }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    simData = d;
+    drawSimulation(d);
+  } catch (e) {
+    toast("Simulation failed: " + e.message);
+  } finally {
+    loading(false);
+  }
+}
+
+function drawSimulation(d) {
+  clearRoutes();
+  const bounds = new google.maps.LatLngBounds();
+  const toPath = (pts) => pts.map((p) => ({ lat: p[0], lng: p[1] }));
+
+  // Initial plan: dashed grey.
+  const initial = smoothPath(toPath(d.initial_route.path), 3);
+  routeLines.push(new google.maps.Polyline({
+    path: initial, map, geodesic: true, strokeOpacity: 0,
+    icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 0.9, scale: 3,
+                      strokeColor: "#94a3b8" }, offset: "0", repeat: "14px" }],
+  }));
+  // Track actually sailed (ends on the final active route): solid.
+  const track = smoothPath(toPath(d.track), 3);
+  routeLines.push(new google.maps.Polyline({
+    path: track, map, geodesic: true, strokeColor: "#f43f5e",
+    strokeOpacity: 0.25, strokeWeight: 11 }));
+  routeLines.push(new google.maps.Polyline({
+    path: track, map, geodesic: true, strokeColor: "#f43f5e",
+    strokeOpacity: 0.95, strokeWeight: 4 }));
+  initial.concat(track).forEach((p) => bounds.extend(p));
+
+  // Simulated weather changes: circle at the largest wave-height change.
+  const changes = d.weather_updates.slice();
+  if (d.departure_change) changes.unshift({ step: 0, departure: true, ...d.departure_change });
+  changes.forEach((w) => {
+    const worse = w.delta_m > 0;
+    const c = new google.maps.Circle({
+      map, center: { lat: w.lat, lng: w.lon }, radius: 150000,
+      strokeColor: worse ? "#a855f7" : "#34d399", strokeOpacity: 0.8,
+      strokeWeight: 1, fillColor: worse ? "#a855f7" : "#34d399",
+      fillOpacity: 0.12, clickable: true });
+    c.addListener("click", () => {
+      info.setPosition({ lat: w.lat, lng: w.lon });
+      info.setContent(`<div class="wx-pop"><b>Simulated weather change</b>` +
+        `${w.departure ? "At departure" : "Step " + w.step}: ` +
+        `${w.delta_m > 0 ? "+" : ""}${w.delta_m} m wave height (peak)</div>`);
+      info.open(map);
+    });
+    routeLines.push(c);
+  });
+
+  // Reroute events: amber badges R1, R2, ...; failed searches in red.
+  let n = 0;
+  d.events.forEach((e) => {
+    if (e.decision !== "adopted" && e.decision !== "failed") return;
+    const adopted = e.decision === "adopted";
+    const m = new google.maps.Marker({
+      position: { lat: e.position[0], lng: e.position[1] }, map, zIndex: 1000,
+      label: adopted ? { text: "R" + (++n), color: "#0b1220",
+                         fontSize: "10px", fontWeight: "700" } : undefined,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: adopted ? 10 : 6,
+        fillColor: adopted ? "#fbbf24" : "#f43f5e", fillOpacity: 1,
+        strokeColor: "#0b1220", strokeWeight: 2 },
+    });
+    m.addListener("click", () => {
+      info.setContent(`<div class="wx-pop"><b>Step ${e.step}: ${esc(e.decision)}</b>` +
+        `${esc(e.reason)}<br>${esc(e.triggers.join("; "))}</div>`);
+      info.open(map, m);
+    });
+    routeMarkers.push(m);
+  });
+
+  addMarker(d.origin.lat, d.origin.lon, "Origin: " + d.origin.name,
+    "#34d399", SHIP_PATH, "");
+  addMarker(d.dest.lat, d.dest.lon, "Destination: " + d.dest.name,
+    "#f43f5e", ANCHOR_PATH, "");
+  vesselMarker = new google.maps.Marker({
+    position: track[0], map, zIndex: 1001, title: "Simulated vessel position",
+    icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 5,
+      fillColor: "#ffffff", fillOpacity: 1, strokeColor: "#0b1220", strokeWeight: 1 },
+  });
+  routeMarkers.push(vesselMarker);
+  map.fitBounds(bounds, 80);
+  renderSimPanel(d);
+}
+
+function simCard(name, cls, v) {
+  return `<div class="card ${cls}">
+    <div class="card-title"><b>${name}</b><span>simulated</span></div>
+    <div class="metrics">
+      <div class="metric"><div class="v">${v.hours.toFixed(1)}</div><div class="k">hours (model)</div></div>
+      <div class="metric"><div class="v">${fmt(v.distance_km)}</div><div class="k">km sailed</div></div>
+      <div class="metric"><div class="v">${v.reroutes}</div><div class="k">reroutes</div></div>
+      <div class="metric"><div class="v">${fmt(v.cost)}</div><div class="k">route cost</div></div>
+    </div></div>`;
+}
+
+function renderSimPanel(d) {
+  $("results-title").textContent = "Simulated voyage";
+  $("cards").innerHTML = simCard("With rerouting", "astar", d.dynamic) +
+    simCard("Without rerouting", "static", d.static);
+  const dh = d.dynamic.hours - d.static.hours;
+  $("verdict").textContent = d.dynamic.reroutes === 0
+    ? "No reroute was adopted: the voyage is the same as without rerouting."
+    : `${d.dynamic.reroutes} reroute(s) adopted. Simulated voyage time ` +
+      `${dh <= 0 ? "" : "+"}${dh.toFixed(1)} h versus the same voyage ` +
+      `without rerouting, under the same simulated weather.`;
+
+  const evs = d.events.map((e) => `<div class="event ${esc(e.decision)}" data-step="${e.step}">
+      <span class="badge">Step ${e.step} · ${esc(e.decision)}</span>${esc(e.reason)}
+      <small>${esc(e.triggers.join("; ") || "—")}${e.remaining_hours != null
+        ? ` · remaining ${e.remaining_hours} h` : ""}${e.alternative_hours != null
+        ? ` vs alternative ${e.alternative_hours} h` : ""}</small></div>`).join("");
+  const steps = d.dynamic.steps;
+  $("sim-extra").innerHTML = `
+    <p class="plan-line">Initial plan: ${d.initial_route.hours} h,
+      ${fmt(d.initial_route.distance_km)} km (from origin, departure weather).<br>
+      Final active route: ${d.final_route.hours} h, ${fmt(d.final_route.distance_km)} km
+      (from the last reroute position, weather at that time).</p>
+    <h3>Vessel progress</h3>
+    <input type="range" id="sim-step" min="0" max="${steps}" value="0" />
+    <div id="sim-step-label" class="plan-line"></div>
+    <h3>Rerouting evaluations (${d.dynamic.evaluations} total, ` +
+      `${d.events.length} with a trigger)</h3>
+    <div class="events">${evs || '<div class="plan-line">No trigger was reached.</div>'}</div>
+    <p class="sim-note">${esc(d.note)} Cost units: km × ML speed multiplier.</p>`;
+  $("sim-extra").classList.remove("hidden");
+  $("sim-step").addEventListener("input", (ev) => showStep(+ev.target.value));
+  showStep(0);
+  $("results").classList.remove("hidden");
+}
+
+function showStep(step) {
+  const d = simData, cps = d.config.cells_per_step;
+  const i = Math.min(step * cps, d.track.length - 1);
+  vesselMarker.setPosition({ lat: d.track[i][0], lng: d.track[i][1] });
+  const wx = d.weather_updates.filter((w) => w.step === step);
+  $("sim-step-label").textContent = `Step ${step} of ${d.dynamic.steps}` +
+    (i === d.track.length - 1 ? " · arrived" : "") +
+    (wx.length ? ` · weather change ${wx[0].delta_m > 0 ? "+" : ""}${wx[0].delta_m} m` : "");
+  document.querySelectorAll(".event").forEach((el) =>
+    el.classList.toggle("current", +el.dataset.step === step));
 }

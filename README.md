@@ -33,7 +33,8 @@ The default grid resolution is `0.05` degrees, approximately 5.5 km per cell.
 - Evaluation of proposed and traditional routes.
 - Simulated dynamic rerouting: a vessel advances along its route, weather
   changes, and a threshold-based controller reroutes from the current
-  position when the alternative is sufficiently better (console only).
+  position when the alternative is sufficiently better. Available in the
+  Flask app ("Voyage simulation" mode) and from the console.
 
 ## Requirements
 
@@ -127,10 +128,11 @@ The Flask server exposes:
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/api/meta` | Available ports, vessels, and region bounds |
+| `GET` | `/api/meta` | Available ports, vessels, region bounds, and simulation options |
 | `GET` | `/api/weather?scenario=typical` | Weather overlay metadata |
 | `GET` | `/api/weather_image?scenario=rough` | Wave overlay PNG |
 | `POST` | `/api/route` | Calculate one or both routes |
+| `POST` | `/api/simulate` | Simulated voyage with weather-driven rerouting, compared with the same voyage without rerouting |
 
 Example route request in PowerShell:
 
@@ -187,15 +189,32 @@ the vessel's current position. Each scenario is compared against a static
 voyage with no rerouting. Thresholds are the `REROUTE_*` settings in
 `config.py`.
 
+The same simulation is available in the Flask app. Choose **Voyage
+simulation** mode, pick ports, a vessel, Typical or Rough base weather and a
+weather change, then run it. The map shows the initial plan (dashed), the
+track actually sailed, reroute points (R1, R2, ...) and where the weather
+changed. A slider moves the vessel through the voyage. The panel lists
+every rerouting evaluation with its triggers and reason, and compares the
+voyage with and without rerouting. The `simulate` request takes `origin`,
+`dest`, `vessel`, `base_weather` (`typical` or `rough`), `scenario`
+(`stable`, `adverse`, `worsening`, `improving_alt`, `minor`, `shifting`)
+and optional `config` overrides (for example `{"cooldown_steps": 6,
+"min_gain": 0.05}`).
+
+All simulation figures are model estimates: the weather changes are synthetic
+and the speed model was trained on synthetic data. They are not real-world
+voyage performance.
+
 ### Tests
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-The routing tests use the committed `data/processed/` artifacts. They check the
-initial evaluation routes, rerouting from a vessel's current position, and
-the dynamic rerouting scenarios.
+The tests use the committed `data/processed/` artifacts and need no network.
+They check the initial evaluation routes, rerouting from a vessel's current
+position, the dynamic rerouting scenarios, and the Flask API (`/api/route`,
+`/api/simulate`).
 
 ## Repository Contents
 

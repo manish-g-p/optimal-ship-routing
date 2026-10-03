@@ -10,6 +10,7 @@ experiments are listed at the end and have **no results**.
 | EXP-001 | Containerized execution | Complete (Loop 001) |
 | EXP-002 | Current-position rerouting | Complete (Loop 003) |
 | EXP-003 | Weather-driven dynamic rerouting scenarios | Complete (Loop 004; re-run Loop 005) |
+| EXP-004 | Voyage simulation through the Flask API/UI | Complete (Loop 006) |
 
 The field list used for EXP-001 (Scenario, Start, Destination, Vessel,
 Weather, Algorithms, Constraints, Metrics, Results, Observations,
@@ -238,6 +239,32 @@ only, and independent of `RouteResult.time_hours`.
 stable or minor weather. These are model results on synthetic weather
 and synthetic-data ML speeds, **not** real-world performance (Source of
 Truth §11.4).
+
+---
+
+## EXP-004 — Voyage simulation through the Flask API/UI
+
+**Status:** Complete. Loop 006, 2026-10-03. Cochin → Dubai, base weather
+`typical`, default `RerouteConfig` unless noted. Runs through
+`POST /api/simulate` (test client, live server, and Docker container) and
+the web UI in headless Chromium.
+
+**Measured:**
+
+| Vessel | Scenario | Settings | Route changes | Without → with rerouting (h, model) |
+| --- | --- | --- | --- | --- |
+| General Cargo | adverse | default | 1 (step 2) | 127.7 → 103.3 (same as EXP-003, also in Docker) |
+| Container Ship | adverse | default | 1 (step 2, 14.7% cheaper) | 84.5 → 72.6 |
+| Container Ship | shifting | cooldown 6 | 3 (steps 1, 8, 14); 7 evaluations blocked by cooldown | 77.0 → 75.9 |
+
+Single `adverse` API request (General Cargo, both runs): 4.3 s on the host
+(one measurement).
+
+**Observations:** The API reproduces the console evaluation exactly. With
+cooldown 6, `shifting` gave the Container Ship only 1.1 h of benefit. That
+is not compared with the General Cargo figure in EXP-003, which used
+cooldown 3. Whether rerouting pays off depends on vessel and settings,
+which is what the planned multi-voyage evaluation should measure.
 
 ---
 

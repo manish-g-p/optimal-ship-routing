@@ -6,6 +6,8 @@ Loads the routing engine ONCE at startup and exposes:
   GET  /api/meta         -> ports + vessels
   GET  /api/weather      -> wave heatmap points for a scenario
   POST /api/route        -> compute Dijkstra + weather-aware A* routes
+  POST /api/simulate     -> simulated voyage with weather-driven rerouting
+                            (vs. the same voyage without rerouting)
 
 Run:  python server.py   (then open http://localhost:8000)
 """
@@ -20,8 +22,11 @@ from flask import (Flask, jsonify, request, send_from_directory, Response,
                    send_file)
 
 import config as C
+from dataclasses import asdict
+
 from src import (grid as G, weather as W, routing as R, ports as P,
-                 vessel as V, ml_model as ML, live_weather as LW)
+                 vessel as V, ml_model as ML, live_weather as LW,
+                 rerouting as RR, weather_sim as WS)
 
 WEB = Path(__file__).resolve().parent / "web"
 app = Flask(__name__)
@@ -125,6 +130,9 @@ def meta():
                     for v in V.VESSELS.values()],
         "region": {"lat_min": C.LAT_MIN, "lat_max": C.LAT_MAX,
                    "lon_min": C.LON_MIN, "lon_max": C.LON_MAX},
+        "simulation": {"scenarios": list(WS.SCENARIOS),
+                       "base_weather": list(SIM_BASE_WEATHER),
+                       "defaults": asdict(RR.RerouteConfig())},
     })
 
 
@@ -221,6 +229,119 @@ def api_route():
         out["astar"] = result_json(weather, ra)
 
     return jsonify(out)
+
+
+# ----------------------------------------------------------------------
+# Dynamic voyage simulation (logic lives in src/rerouting.py and
+# src/weather_sim.py; this only validates input and shapes the JSON)
+# ----------------------------------------------------------------------
+SIM_BASE_WEATHER = ("typical", "rough")    # offline only - no live weather
+
+
+def sim_router_factory(vessel_name):
+    """weather -> Router using the ML speed cost (as A* in /api/route)."""
+    return RR.router_factory(GRID, V.get(vessel_name), MODEL)
+
+
+def _latlon(cell):
+    return list(GRID.cell_latlon(*cell))
+
+
+def _route_json(res, ves):
+    return {"path": [[la, lo] for la, lo in res.latlon],
+            "distance_km": res.distance_km,
+            "cost": round(res.cost, 1),
+            "hours": round(RR.cost_hours(res.cost, ves), 1)}
+
+
+def _voyage_json(res, ves):
+    return {"hours": round(RR.cost_hours(res.sailed_cost, ves), 1),
+            "distance_km": round(res.sailed_km, 1),
+            "cost": round(res.sailed_cost, 1),
+            "reroutes": len(res.reroutes),
+            "evaluations": len(res.events),
+            "steps": res.steps, "arrived": res.arrived}
+
+
+def _event_json(e, ves):
+    def h(cost):
+        return None if cost is None else round(RR.cost_hours(cost, ves), 1)
+    return {"step": e.step, "position": _latlon(e.cell),
+            "decision": e.decision, "reason": e.reason,
+            "triggers": list(e.triggers),
+            "max_wave_m": round(e.max_swh_m, 2),
+            "remaining_hours": h(e.remaining_cost),
+            "alternative_hours": h(e.alternative_cost),
+            "gain_pct": None if e.gain_rel is None else round(100 * e.gain_rel, 1)}
+
+
+def _change_json(before, after):
+    lat, lon, delta = WS.peak_change(before, after, GRID)
+    return {"lat": lat, "lon": lon, "delta_m": round(delta, 2)}
+
+
+@app.route("/api/simulate", methods=["POST"])
+def api_simulate():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected a JSON object."}), 400
+    origin, dest = body.get("origin"), body.get("dest")
+    vessel_name = body.get("vessel", V.DEFAULT_VESSEL)
+    base_name = body.get("base_weather", "typical")
+    scenario = body.get("scenario", "adverse")
+
+    if origin not in P.PORTS or dest not in P.PORTS:
+        return jsonify({"error": "Unknown port."}), 400
+    if origin == dest:
+        return jsonify({"error": "Origin and destination are the same."}), 400
+    if vessel_name not in V.VESSELS:
+        return jsonify({"error": "Unknown vessel."}), 400
+    if base_name not in SIM_BASE_WEATHER:
+        return jsonify({"error": "Base weather must be one of "
+                                 f"{', '.join(SIM_BASE_WEATHER)}."}), 400
+    if scenario not in WS.SCENARIOS:
+        return jsonify({"error": f"Unknown weather scenario {scenario!r}."}), 400
+    try:
+        cfg = RR.config_from_dict(body.get("config"))
+    except (ValueError, AttributeError) as e:
+        return jsonify({"error": f"Invalid rerouting settings: {e}"}), 400
+
+    ves = V.get(vessel_name)
+    base = get_weather(base_name)
+    start = GRID.nearest_cell(*P.coord(origin))
+    goal = GRID.nearest_cell(*P.coord(dest))
+    try:
+        cmp = RR.compare_voyage(GRID, start, goal, base,
+                                sim_router_factory(vessel_name), scenario, cfg)
+    except ValueError as e:
+        return jsonify({"error": f"Simulation failed: {e}"}), 422
+
+    dyn, sta = cmp.dynamic, cmp.static
+    changes, before = [], cmp.departure
+    for step in sorted(cmp.updates):
+        changes.append({"step": step, **_change_json(before, cmp.updates[step])})
+        before = cmp.updates[step]
+
+    return jsonify({
+        "simulated": True,
+        "note": "Simulated voyage: synthetic weather changes and an ML speed "
+                "model trained on synthetic data. Hours are model estimates, "
+                "not real-world performance.",
+        "origin": {"name": origin, "lat": _latlon(start)[0], "lon": _latlon(start)[1]},
+        "dest": {"name": dest, "lat": _latlon(goal)[0], "lon": _latlon(goal)[1]},
+        "vessel": vessel_name, "base_weather": base_name, "scenario": scenario,
+        "config": asdict(cfg),
+        "initial_route": _route_json(dyn.initial_route, ves),
+        "final_route": _route_json(dyn.active_route, ves),
+        "track": [_latlon(c) for c in dyn.track],
+        "dynamic": _voyage_json(dyn, ves),
+        "static": _voyage_json(sta, ves),
+        "events": [_event_json(e, ves) for e in dyn.events
+                   if e.decision != "no_trigger"],
+        "departure_change": (_change_json(base, cmp.departure)
+                             if cmp.departure is not base else None),
+        "weather_updates": changes,
+    })
 
 
 if __name__ == "__main__":

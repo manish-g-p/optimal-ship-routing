@@ -9,6 +9,21 @@ Truth; see `README.md` for how to read their "§" references.
 
 ---
 
+## 2026-10-03 — Loop 006: dynamic rerouting in the Flask UI
+
+- **Added:** `POST /api/simulate` (`server.py`); a "Voyage simulation"
+  mode in `web/index.html`, `web/app.js` and `web/style.css`;
+  `tests/test_server.py` (8 tests).
+- **Changed:** `src/rerouting.py` (`compare_voyage`, `config_from_dict`,
+  `cost_hours`, `VoyageResult.sailed_km`; CLI uses `compare_voyage`, same
+  output); `src/weather_sim.py` (`peak_change`); `/api/meta` (added a
+  `simulation` key); docs (`README.md`, `DOCKER.md`, Source of Truth
+  status, loop-engineering records).
+- **Not changed:** routing algorithms, `/api/route`, route-planning UI
+  behavior, Streamlit app, dependencies, Docker files.
+
+---
+
 ## 2026-10-03 — Loop 005: documentation synchronization
 
 Documentation only; no code, tests, configuration or dependencies

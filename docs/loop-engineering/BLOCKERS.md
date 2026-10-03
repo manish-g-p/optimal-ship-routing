@@ -1,6 +1,6 @@
 # Blockers and Open Concerns
 
-**Last reviewed:** 2026-10-03 (Loop 005) at commit `e8f68d1`.
+**Last reviewed:** 2026-10-03 (Loop 006), working tree on top of `095bd0b`.
 
 - **Blocker:** prevents the current/next goal from being done or validated.
 - **Open concern:** a known correctness issue, risk or limitation that
@@ -63,7 +63,11 @@ Implemented in Loop 004, with these known limits:
   unchanged (`DECISIONS.md` → Unresolved).
 - Missing/invalid/stale weather handling (Source of Truth §9.3) is not
   implemented for the simulation; live weather is not connected to it.
-- Not exposed in the Flask or Streamlit UI (Phase 4).
+- Exposed in the Flask UI since Loop 006, not in Streamlit. In the UI,
+  the wave overlay shows the base weather; simulated storms appear only
+  as circles at the peak change (fixed 150 km display radius). A request
+  runs the voyage twice and blocks the request thread for its duration
+  (≈4 s for `adverse`; longer scenarios not timed).
 
 ### C5 — scikit-learn version skew in the ML model artifact (formerly Q6)
 
@@ -87,6 +91,13 @@ still the developer's decision; no loop has assumed or acted on it.
 Pinned in `requirements.txt`; still not imported anywhere (re-checked in
 Loop 005 with a repo-wide grep). Remove only as part of a deliberate
 dependency change.
+
+### C9 — Pre-existing web UI warnings (seen in Loop 006 browser check)
+
+The browser console shows a 404 for `/favicon.ico` and Google's deprecation
+notice for `google.maps.Marker` (used by the existing UI, and reused by the
+simulation view). Google says `Marker` is not scheduled for removal. Not
+fixed: unrelated to rerouting.
 
 ### C8 — Documentation risks
 
