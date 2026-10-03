@@ -1,8 +1,8 @@
 # Project State
 
-**Last updated:** 2026-10-03 (Loop 008 — rerouting evaluation)
+**Last updated:** 2026-10-03 (Loop 009 — interactive Simulation lab)
 **Branch / commit verified:** `feature/dynamic-routing`, working tree on
-top of `e7597a1` (Loop 008 changes not yet committed when written)
+top of `c307fe5` (Loop 009 changes not yet committed when written)
 
 What is actually true in the repository now — verified against the code
 and test runs, not taken from other documents. Project direction and
@@ -108,7 +108,7 @@ heatmap), kept separate from `data/processed/`. Current results: 144 ok,
 
 **Interfaces** — Flask (`server.py` + `web/`, Google Maps, JSON API) and
 Streamlit (`app.py`), both pre-existing. Since Loop 006 the Flask app
-has a **"Voyage simulation" mode**, backed by `POST /api/simulate`, which calls
+has a **"Voyage replay" mode** (called "Voyage simulation" before Loop 009), backed by `POST /api/simulate`, which calls
 `rerouting.compare_voyage`. It takes ports, vessel, Typical/Rough base
 weather, a `weather_sim` scenario and optional `RerouteConfig` overrides
 (validated by `rerouting.config_from_dict`). It returns the initial plan, the
@@ -117,6 +117,28 @@ rerouting evaluations that had a trigger, and the simulated weather-change
 locations. The UI draws these with a step slider. It always uses the ML speed
 cost model, and live weather is rejected. `/api/meta` gained a `simulation`
 key; `/api/route` is unchanged. Streamlit does not expose rerouting.
+
+**Simulation lab (Loop 009)** — third Flask mode for interactive
+voyages:
+
+- **Engine:** `rerouting.Voyage` is a step-by-step voyage; `simulate()`
+  is now a loop over it (150-pair evaluation re-run byte-identical).
+  `src/sim_session.py` holds `SimSession`: a configured voyage plus a
+  no-rerouting twin under the same weather; applied and pending
+  disturbance lists; preset schedule; timeline; locks. `SessionStore`
+  keeps sessions in memory (≤ 8, 30 min idle TTL).
+- **Weather:** `weather_sim.apply_disturbances` (base + Gaussian swh
+  bumps, base untouched) and `weather_sim.PRESETS`, 8 deterministic
+  demonstration schedules.
+- **API:** `/api/sim/presets` and `/api/sim/sessions[/<id>[/step|/weather|
+  /weather/apply|/weather/discard|/schedule/cancel|/reset|/weather_image]]`.
+  `expected_step` makes steps idempotent. A busy session returns 409;
+  internal errors return a generic 500.
+- **UI** (`web/`): control bar (start/pause/resume/step/reset, speed,
+  progress); weather panel (place by map click, drag to move, edit or
+  remove, pending vs applied, apply/discard, cancel schedule); live
+  metrics with a no-rerouting comparison; decision timeline linked to
+  map markers. The overlay is rendered from the applied weather field.
 
 **Infrastructure (pre-existing)** — `docker/Dockerfile`,
 `docker/docker-compose.yml`, root `.dockerignore`, `DOCKER.md`; pinned
@@ -136,7 +158,12 @@ vessel, `/api/simulate` cases). `test_routing.py` also has 7
 relation, vessel profiles, weather changes, calm-water default).
 `test_evaluate_rerouting.py` (14 tests: matrix coverage, pairing, metric
 and status calculations, failed-run handling, summary-vs-detail,
-determinism on a real subset). 55 tests pass (Loop 008).
+determinism on a real subset). `test_sim_session.py` (20 tests: session
+lifecycle, batch-engine parity, pending vs applied weather, manual storm →
+real reroute, preset/manual merging, validation, failure handling, store
+limits, API flow, invalid requests, busy/500 handling, existing endpoints).
+75 tests pass (Loop 009). Browser end-to-end: `tools/lab_e2e.mjs` (28
+checks); host-vs-Docker parity: `tools/lab_parity.py`.
 
 ## Planned (not implemented)
 
@@ -171,10 +198,14 @@ in the current roadmap. See `TASKS.md` → Historical tasks.
 - Vessel draft is not used by routing; the grid enforces 10 m for all
   vessels. VLCC (20.5 m) on Kandla → Cochin crosses 16 m water
   (`BLOCKERS.md` C10).
-- UI simulation: the wave overlay shows the base weather, not the
+- Voyage replay: the wave overlay shows the base weather, not the
   simulated storms (those are drawn as circles at the peak change); one
   request runs the voyage twice and can take several seconds (≈4 s for
   `adverse`, measured); not in Streamlit.
+- Simulation lab: sessions live in one process's memory (lost on restart,
+  not shared across workers); each weather change rebuilds the ML cost
+  grid (~1.2 s); remaining/projected hours assume the current weather
+  persists; only wave height is simulated (`BLOCKERS.md` C13).
 - ML model is trained on synthetic data; pickle written with
   scikit-learn 1.8.0 and loaded under 1.9.0 (warning, no observed effect).
 
@@ -190,7 +221,7 @@ in the current roadmap. See `TASKS.md` → Historical tasks.
 | `python -m src.rerouting` | Dynamic-rerouting scenarios, dynamic vs. static voyage (one voyage). |
 | `python -m src.evaluate_rerouting` | Full rerouting evaluation matrix (150 pairs, ~9 min) → `data/rerouting_eval/`. |
 | `python -m unittest discover -s tests -v` | Test suite (~45 s). |
-| `python server.py` | Flask UI/API on port 8000 (Maps key optional, via `.env`); route planning and voyage simulation modes. |
+| `python server.py` | Flask UI/API on port 8000 (Maps key optional, via `.env`); route planning, voyage replay and Simulation lab modes. |
 | `streamlit run app.py` | Streamlit UI on port 8501. |
 
 All of these also run in the `nautilus-dev` Docker image; see `DOCKER.md`.

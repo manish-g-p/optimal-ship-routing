@@ -1,6 +1,6 @@
 # Blockers and Open Concerns
 
-**Last reviewed:** 2026-10-03 (Loop 008), working tree on top of `e7597a1`.
+**Last reviewed:** 2026-10-03 (Loop 009), working tree on top of `c307fe5`.
 
 - **Blocker:** prevents the current/next goal from being done or validated.
 - **Open concern:** a known correctness issue, risk or limitation that
@@ -122,12 +122,29 @@ counterfactual run). The scenarios and thresholds were designed on one of
 the 25 voyage-vessel pairs (Cochin → Dubai, General Cargo), so that pair
 is in-sample.
 
+### C13 — Simulation-lab limitations (Loop 009)
+
+- Sessions are in one process's memory: lost on server restart, not shared
+  across Flask workers or containers. Running several workers or replicas
+  would break sessions (requests could reach a process without the
+  session). Capped at 8 sessions (oldest idle evicted) and 30 min idle TTL.
+- Each weather change rebuilds the ML cost grid (≈ 1.2 s); a preset that
+  changes weather every step (`moving_storm`) takes ≈ 16–19 s per voyage.
+- Only significant wave height is simulated; wave period and direction
+  stay as in the base sea state. "Remaining" and "projected" hours assume
+  the current weather persists.
+- Circle radius on the map is 1σ of the Gaussian; the storm's effect
+  extends beyond it (visible in the overlay).
+- Browser coverage: verified in headless Chromium only (no Firefox/Safari),
+  at 1500×950 and 1280×800. Narrower layouts were not checked.
+
 ### C9 — Pre-existing web UI warnings (seen in Loop 006 browser check)
 
 The browser console shows a 404 for `/favicon.ico` and Google's deprecation
 notice for `google.maps.Marker` (used by the existing UI, and reused by the
 simulation view). Google says `Marker` is not scheduled for removal. Not
-fixed: unrelated to rerouting.
+fixed: unrelated to rerouting. The Simulation lab also uses `Marker` (same
+notice); its own check found no other console errors (Loop 009).
 
 ### C8 — Documentation risks
 

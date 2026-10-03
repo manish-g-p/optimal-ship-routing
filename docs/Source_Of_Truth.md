@@ -3,7 +3,7 @@
 **Project:** Nautilus
 **Category:** ML-Assisted Dynamic Ship Routing System
 **Primary Focus:** Weather-Aware Rerouting and Machine Learning
-**Status (2026-10-03):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented, and the simulation can be run and inspected in the Flask UI. Route cost, distance and travel time now have defined, tested semantics (§10.1). The threshold-based controller has been evaluated across all voyages, vessels and weather scenarios (§11.5). Next: to be decided (see `docs/loop-engineering/TASKS.md`). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
+**Status (2026-10-03):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented, and the simulation can be run and inspected in the Flask UI, including an interactive Simulation lab with manual weather control (§12.1). Route cost, distance and travel time now have defined, tested semantics (§10.1). The threshold-based controller has been evaluated across all voyages, vessels and weather scenarios (§11.5). Next: to be decided (see `docs/loop-engineering/TASKS.md`). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
 
 ---
 
@@ -205,8 +205,9 @@ As of 2026-10-03:
 
 * **Current-position rerouting:** `Router.search` routes from any navigable grid cell; invalid or non-navigable start/goal cells raise an error; `RouteResult.cost` and `Router.path_cost` expose the routing cost for comparisons.
 * **Threshold-based dynamic rerouting (simulation):** `src/weather_sim.py` (deterministic simulated weather updates) and `src/rerouting.py` (vessel progress along the active route, remaining-route evaluation, configurable triggers, cooldown, improvement thresholds, rerouting event log). Defaults are the `REROUTE_*` settings in `config.py`. Run it with `python -m src.rerouting`.
-* **Flask UI integration:** "Voyage simulation" mode and `POST /api/simulate` run a voyage with and without rerouting. They show the initial plan, the sailed track, reroute points, weather changes, a progress slider, and each rerouting evaluation with its reason. The Streamlit app does not include it.
+* **Flask UI integration:** "Voyage replay" mode and `POST /api/simulate` run a voyage with and without rerouting. They show the initial plan, the sailed track, reroute points, weather changes, a progress slider, and each rerouting evaluation with its reason. The Streamlit app does not include it.
 * **Consistent travel time:** routes report travel time from the ML speed model for the selected vessel and weather, the same model the weather-aware cost uses (§10.1).
+* **Simulation lab:** `src/sim_session.py` + `/api/sim/sessions…` let a user step, pause, reset and edit weather during a voyage in the browser. The same `rerouting.Voyage` stepper used by `simulate()` makes every decision (§12.1).
 * **Rerouting evaluation:** `python -m src.evaluate_rerouting` compares rerouting-enabled and rerouting-disabled voyages across the fixed voyage set, all vessel profiles and all simulated weather scenarios (§11.5).
 * Not yet implemented: ML rerouting decisions (§8.2).
 
@@ -599,6 +600,17 @@ The existing user interface should be extended to demonstrate the dynamic behavi
 
 The UI is intended for demonstration and analysis. It does not need to provide sophisticated operational control or real-time vessel tracking.
 
+### 12.1 Implemented: Simulation Lab (2026-10-03)
+
+The Flask app has three modes: **Route planning**, **Voyage replay** (whole voyage in one request, `/api/simulate`) and **Simulation lab** (interactive).
+
+* **Engine:** `rerouting.Voyage` is a step-by-step voyage. `simulate()` and the lab both use it, so lab decisions are the batch engine's decisions; this is tested, and a lab preset reproduces the evaluated scenario exactly. A lab session runs the configured voyage and a no-rerouting twin under identical weather.
+* **Weather:** the applied weather is the base sea state plus a list of disturbances (Gaussian change of significant wave height: peak Δ, radius σ). Users add, move, resize, re-intensify or remove disturbances. Edits are **pending** until **Apply now** or the next step; only applied weather reaches routing, and the map shows the two differently. Base data are never modified. Wave period and direction are not changed.
+* **Step order:** apply pending and scheduled weather, then evaluate the active route and maybe reroute (unchanged controller), then advance the vessel.
+* **Traceability:** each evaluation is logged with its triggers, active-route cost and hours, whether a search ran, the alternative and its gain, and the decision and reason. Every reroute marker comes from a logged adoption.
+* **Sessions:** in memory, in one server process; up to 8, expiring after 30 minutes idle. Steps carry `expected_step`, so a repeated request cannot advance twice.
+* **Demonstration scenarios:** deterministic disturbance schedules (`weather_sim.PRESETS`). Five reuse the evaluated scenarios' parameters; two are added: "storm over route" and "no useful alternative".
+
 ---
 
 ## 13. Technology and Infrastructure
@@ -683,7 +695,7 @@ The following limitations should be considered during implementation.
 * Current-position route generation is implemented and tested (`Router.search` from any navigable cell, `RouteResult.cost`, `Router.path_cost`).
 * A threshold-based rerouting loop runs in simulation only (`src/rerouting.py`, `src/weather_sim.py`, `python -m src.rerouting`): weather updates are synthetic wave-height perturbations, and vessel progress is a fixed number of grid cells per step, not time-based.
 * Rerouting decisions compare routing cost (km × weather/ML speed multiplier). Reported travel time follows §10.1 and is not used for decisions.
-* Rerouting is exposed in the Flask interface ("Voyage simulation" mode), not in Streamlit.
+* Rerouting is exposed in the Flask interface ("Voyage replay" and "Simulation lab" modes), not in Streamlit.
 
 ### Machine Learning
 
@@ -702,6 +714,7 @@ The following limitations should be considered during implementation.
 * ETA and route cost were inconsistent until 2026-10-03 (constant 18 kn ETA); now defined in §10.1. Travel time is only as good as the synthetic-data speed model.
 * The navigable grid applies one 10 m minimum depth to all vessels. Vessel draft is not used in routing, so deep-draft vessels can be routed through water shallower than their draft. The evaluation flags this case (VLCC, Kandla → Cochin) but does not prevent it.
 * Rerouting decisions assume the current weather persists. Under moving weather they can make a voyage slower (§11.5).
+* Simulation-lab sessions are held in one server process's memory; they are lost on restart and are not shared across workers or replicas. The lab's "remaining" and "projected" hours assume the current weather persists.
 * Dynamic and static routes must be compared under equivalent assumptions.
 * Simulation results may not reflect actual maritime operations.
 

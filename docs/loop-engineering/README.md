@@ -5,8 +5,8 @@ what is true in the repository, what comes next, and the evidence behind
 both — so an agent can start a session without relying on stale
 assumptions.
 
-**Last synchronized:** 2026-10-03 (Loop 008), branch
-`feature/dynamic-routing`, working tree on top of `e7597a1`.
+**Last synchronized:** 2026-10-03 (Loop 009), branch
+`feature/dynamic-routing`, working tree on top of `c307fe5`.
 
 ## Authoritative references
 
@@ -59,7 +59,7 @@ Other active references outside this directory: [`README.md`](../../README.md)
    `EXPERIMENTS.md`.
 
 Then verify any claim you depend on against the code (and run
-`python -m unittest discover -s tests` — 55 tests, about 2–2.5 min).
+`python -m unittest discover -s tests` — 75 tests, about 3–3.5 min).
 
 ## Maintenance convention
 

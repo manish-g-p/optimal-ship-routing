@@ -9,6 +9,40 @@ task: TASK-002" are historical; see `README.md`.
 
 ---
 
+## Loop 009 — Interactive Simulation lab
+
+**Date:** 2026-10-03
+**Branch / commit:** `feature/dynamic-routing`, on top of `c307fe5`
+(uncommitted when written)
+**Task:** User-directed: make the rerouting engine interactively testable
+in the browser, with manual weather, start/pause/step/reset, traceable
+decisions, on host and in Docker.
+
+**What was done:** Inspected the server, frontend, engine, Docker and
+tests. `/api/simulate` could not support pausing or mid-voyage weather,
+so I:
+
+1. Refactored the simulate loop into `rerouting.Voyage` and proved it
+   unchanged with the full evaluation re-run.
+2. Added `weather_sim.apply_disturbances` and `PRESETS`.
+3. Added `src/sim_session.py` (sessions, pending/applied weather,
+   no-rerouting twin, timeline, store) and the `/api/sim/…` endpoints.
+4. Added the Simulation lab UI: control bar, weather panel with map
+   click/drag, metrics, timeline, and an overlay of the applied field.
+5. Added `tests/test_sim_session.py`, `tools/lab_e2e.mjs` and
+   `tools/lab_parity.py`.
+
+Fixed five defects found in real-browser runs (VALIDATION → Loop 009).
+
+**Validation:** `VALIDATION.md` → Loop 009; measurements in EXP-007.
+
+**Decision:** Done (Decision 013). Thresholds and the routing cost model
+are unchanged.
+
+**Next:** Awaiting user confirmation (`TASKS.md`).
+
+---
+
 ## Loop 008 — Rerouting evaluation across voyages and vessels
 
 **Date:** 2026-10-03

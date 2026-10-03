@@ -72,7 +72,7 @@ network access is used at all.
 
 **Run the tests and the dynamic-rerouting scenarios** (verified offline;
 see `docs/loop-engineering/VALIDATION.md`). The voyage simulation is also in
-the Flask UI (`python server.py`, "Voyage simulation" mode):
+the Flask UI (`python server.py`, "Voyage replay" and "Simulation lab" modes):
 
 ```bash
 docker run --rm --network none nautilus-dev python -m unittest discover -s tests
@@ -88,7 +88,15 @@ docker run --rm -p 8000:8000 --env-file .env nautilus-dev python server.py
 docker run --rm -p 8000:8000 -e GOOGLE_MAPS_API_KEY=your-key nautilus-dev python server.py
 ```
 
-Open http://localhost:8000.
+Open http://localhost:8000. All modes run in the container, including the
+interactive **Simulation lab**. Its sessions live in the memory of that
+single Flask process, so they are lost when the container stops. Do not
+scale it to several workers or replicas without shared session storage.
+The backend makes no outbound requests for the lab (only the optional
+"Live" sea state in route planning does). The browser loads Google Maps
+tiles itself. Verified in Loop 009: the browser end-to-end check passed
+against the container, and a deterministic lab run gave results
+identical to the host (`tools/lab_parity.py`).
 
 **Run the Streamlit UI** (no API key needed):
 

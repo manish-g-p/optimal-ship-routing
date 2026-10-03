@@ -25,6 +25,7 @@ current Source of Truth (2026-10-03).
 | 010 | Rerouting UI: Flask only, via `/api/simulate`; logic stays in `src/` | **Confirmed** (hours source amended by 011) |
 | 011 | Metric semantics: distance / cost / travel time; ML time model for all routes | **Confirmed** |
 | 012 | Rerouting evaluation design (matrix, pairing, statuses, outcome tolerance, outputs) | **Confirmed** |
+| 013 | Simulation lab: stepper engine, in-memory sessions, pending/applied weather semantics | **Confirmed** |
 
 ---
 
@@ -265,6 +266,40 @@ floors speed at service ÷ 4, about the model's own minimum prediction.
   non-deterministic column.
 
 ---
+
+## Decision 013 — Simulation lab architecture — CONFIRMED
+
+**Decision (Loop 009):**
+
+- **One engine.** The `simulate()` loop body became `rerouting.Voyage`
+  (`step()`, `set_router()`), and `simulate()` loops over it. The lab uses
+  the same class, so it cannot drift from the evaluated behaviour.
+  Verified: the full EXP-006 matrix re-run gives byte-identical output, and
+  a lab preset reproduces its scenario exactly.
+- **Stateful sessions, smallest option.** `/api/simulate` runs a whole
+  voyage per request and cannot pause or take weather edits between steps,
+  so sessions are needed. They live in memory in the single Flask process
+  (`SessionStore`: ≤ 8 sessions, 30 min idle TTL, per-session lock, at most
+  2 disturbed cost grids per session). No Redis or database. Consequence:
+  not shared across processes or replicas, and lost on restart (documented).
+- **Weather semantics.** Weather = base field + disturbance list (Gaussian
+  change of significant wave height). User edits are *pending*; they reach
+  routing only via **Apply now** or at the start of the next step. Each step
+  applies pending and scheduled weather, then evaluates and reroutes, then
+  advances. Preset schedules replace only preset-origin disturbances; an
+  edited preset disturbance becomes manual. The base data are never
+  modified.
+- **Concurrency.** The client sends one request at a time (a promise queue)
+  and steps carry `expected_step`. The server rejects stale or duplicate
+  steps (409) and concurrent operations on a session (409 "busy"). The
+  overlay image reads an atomic (version, weather) snapshot and never
+  takes the session lock. Found in testing: holding it made steps fail
+  while the browser loaded the image.
+- **Visualization.** The overlay is rendered from the *applied* field, so
+  it is accurate for wave height. Pending edits are outlines only.
+- Existing `/api/route`, `/api/meta` and `/api/simulate` are unchanged; the
+  replay mode is only relabelled "Voyage replay". Rerouting thresholds are
+  unchanged.
 
 ## Unresolved choices
 

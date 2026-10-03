@@ -9,6 +9,30 @@ Truth; see `README.md` for how to read their "§" references.
 
 ---
 
+## 2026-10-03 — Loop 009: interactive Simulation lab
+
+- **Added:** `src/sim_session.py`; `tests/test_sim_session.py` (20 tests);
+  `tools/lab_e2e.mjs` (browser check); `tools/lab_parity.py` (environment
+  comparison).
+- **Changed:**
+  - `src/rerouting.py`: `Voyage` stepper; `simulate()` uses it, with
+    identical results.
+  - `src/weather_sim.py`: `apply_disturbances`, `PRESETS`/`preset`;
+    `perturb_waves` uses a shared `_bump`, with identical results.
+  - `server.py`: `/api/sim/presets` and `/api/sim/sessions…` endpoints;
+    overlay rendering factored into `_swh_png`.
+  - `web/index.html`, `web/app.js`, `web/style.css`: Simulation-lab mode;
+    replay mode relabelled "Voyage replay"; generic mode visibility; toast
+    timer fix.
+  - Docs: `README.md`, `DOCKER.md`, Source of Truth (§5.7, §12.1, §15,
+    status), loop-engineering records.
+- **Not changed:** routing algorithms, cost/time model, rerouting
+  thresholds and decisions, `/api/route`, `/api/meta` (existing keys),
+  `/api/simulate`, `data/processed/`, `data/rerouting_eval/`,
+  dependencies, Docker files.
+
+---
+
 ## 2026-10-03 — Loop 008: rerouting evaluation
 
 - **Added:**

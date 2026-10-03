@@ -8,7 +8,7 @@ written or a command ran once without error.
 Standard checks for routing/rerouting changes:
 
 ```bash
-python -m unittest discover -s tests -v          # 55 tests (Loop 008), ~2-2.5 min
+python -m unittest discover -s tests -v          # 75 tests (Loop 009), ~3.5 min
 python -m src.rerouting                          # scenario table (EXP-003)
 python -m src.evaluate_rerouting                 # 150-pair matrix, ~9 min (EXP-006); to check
                                                  # reproducibility, copy data/rerouting_eval/ first,
@@ -17,6 +17,9 @@ python -m src.evaluate                           # then diff evaluation.csv vs. 
                                                  # file excluding trad_sec/prop_sec; restore it
 docker build -f docker/Dockerfile -t nautilus-dev .
 docker run --rm --network none nautilus-dev python -m unittest discover -s tests
+# web UI (server running on :8000, Maps key in .env):
+CHROME=/path/to/chrome node tools/lab_e2e.mjs <outdir>         # 28 browser checks
+python tools/lab_parity.py http://localhost:8000 host.json      # repeat against Docker, compare
 ```
 
 ---
@@ -43,6 +46,69 @@ change could affect routes or rerouting, re-run
 `data/rerouting_eval/` (EXP-006 baseline), not only the unit tests.
 
 ---
+
+## Loop 009 — interactive Simulation lab (checks run in this loop)
+
+All on the working tree on top of `c307fe5`.
+
+- [x] **Engine refactor non-regression:** `python -m src.rerouting` gave an
+      identical scenario table. The full 150-pair evaluation re-run had
+      `runs.csv` identical to the committed baseline excluding `wall_s`,
+      and events and all summaries byte-identical. `test_rerouting.py`:
+      16 OK.
+- [x] **Host tests:** `python -m unittest discover -s tests` → **Ran 75 tests
+      in 204.2 s — OK** (run concurrently with the Docker build). New
+      `test_sim_session.py`: **20 OK**, covering:
+      - lifecycle and batch-engine parity;
+      - pending weather not seen by routing until applied;
+      - a manual storm causing a real reroute, with the map route starting
+        at the R1 position;
+      - preset/manual merging and edited preset → manual;
+      - base data untouched;
+      - validation (NaN, inf, ranges, bools, strings, ids, count);
+      - failed search keeps the route; failed weather build changes nothing;
+      - store eviction/TTL;
+      - API flow, invalid requests, busy 409, and a generic 500 without
+        internals;
+      - existing endpoints unchanged.
+- [x] **Browser, host** (`tools/lab_e2e.mjs`, headless Chromium, real Maps
+      key, `python server.py` on :8000): **28/28 PASS**. Covers route
+      planning before and after; lab controls enabled/disabled correctly;
+      start → auto-run, pause holds the step for 2 s, resume continues the
+      same voyage; Step advances exactly one step on a double click and moves
+      the vessel; no duplicate timeline entries; map click → pending storm
+      (routing unaware); Apply now → overlay re-rendered (v=1); next step →
+      backend R1 adopted (24.7–25.3% cheaper across runs; depends on where the vessel was when the storm was placed); R1 marker and the active route
+      starting there; initial route and track kept; timeline detail opens;
+      move → pending; discard; client-side and server-side (400) validation
+      with state intact; two-click reset clears everything; preset
+      `storm_ahead` runs to completion; no overlap of panels, control bar and
+      legend at 1500×950 and 1280×800; no stale popup; leaving and
+      re-entering the lab. HTTP errors: only `404 /favicon.ico`
+      (pre-existing) and the deliberate 400. Console errors: none (apart
+      from Google's `Marker` deprecation notice, a warning).
+- [x] **Defects found by the browser runs and fixed before the final run:**
+      - the overlay image held the session lock, so auto-run steps hit 409
+        "busy" and stopped;
+      - `toast()` timers hid newer messages early;
+      - a fast double click on Step sent two requests (the server rejected
+        the second with 409, but the user saw an error);
+      - a stale info window survived reset or a new voyage;
+      - the control bar covered the legend at 1280 px.
+
+      Each was re-verified in the next run.
+- [x] **Docker:** image rebuilt. `--network none` test suite: **Ran 75 tests
+      in 218.5 s — OK**. Container server (`-p 8000:8000 --env-file .env`;
+      `.env` confirmed *not* in the image): `tools/lab_e2e.mjs` **28/28
+      PASS**, no unexpected HTTP errors, no console errors.
+- [x] **Host vs. Docker parity:** `tools/lab_parity.py` sequences (manual
+      storm, `moving_storm` preset, rerouting off): **identical full JSON
+      states** (EXP-007).
+- [x] Route-planning baseline unaffected: `test_evaluation_voyages_unchanged`
+      and `/api/route` checks pass; `data/processed/` untouched.
+- [ ] Not verified: browsers other than Chromium; viewports narrower than
+      1280 px; the "Live" sea state in the lab (deliberately rejected);
+      running the server with several workers (unsupported, see C13).
 
 ## Loop 008 — rerouting evaluation (checks run in this loop)
 

@@ -11,8 +11,8 @@ Status values: `DONE`, `NEXT` (proposed or confirmed), `BACKLOG`,
 
 ## Current goal
 
-None in progress. The last implementation goal (rerouting evaluation
-across voyages and vessels, Loop 008) is `DONE`.
+None in progress. The last implementation goal (interactive Simulation
+lab, Loop 009) is `DONE`.
 
 ## Next goal — `NEXT` (proposed, needs user confirmation)
 
@@ -33,6 +33,19 @@ Candidates, in suggested order. None is decided by the user.
 ---
 
 ## Completed goals
+
+### Interactive weather and rerouting Simulation lab (Phase 4 extension) — `DONE`
+
+Loop 009, 2026-10-03 (uncommitted when written). The Flask app has a
+"Simulation lab" mode backed by stateful sessions (`src/sim_session.py`,
+`/api/sim/sessions…`). Users can start, pause, step and reset a voyage,
+add, move or edit storms and calm patches (pending until applied), and
+watch the backend controller's real decisions on the map and in a
+timeline. The engine was refactored into `rerouting.Voyage`, with the
+evaluation unchanged. Evidence: `tests/test_sim_session.py`,
+`tools/lab_e2e.mjs` (28/28 on host and in Docker),
+`tools/lab_parity.py` (host == Docker), `VALIDATION.md` → Loop 009,
+EXP-007.
 
 ### Rerouting evaluation across voyages, vessels and scenarios (Phase 4) — `DONE`
 
@@ -56,7 +69,8 @@ EXP-005.
 ### Dynamic rerouting in the application interface (part of Phase 4) — `DONE`
 
 Loop 006, 2026-10-03 (uncommitted when written). The Flask app has a
-"Voyage simulation" mode and `POST /api/simulate`. The user picks ports,
+"Voyage simulation" mode (renamed "Voyage replay" in Loop 009) and
+`POST /api/simulate`. The user picks ports,
 vessel, base weather, weather change and rerouting settings. They see the
 initial plan, the sailed track, reroute points, weather-change locations
 and vessel progress (slider). They can inspect each rerouting evaluation's

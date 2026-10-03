@@ -13,6 +13,7 @@ experiments are listed at the end and have **no results**.
 | EXP-004 | Voyage simulation through the Flask API/UI | Complete (Loop 006) |
 | EXP-005 | Travel-time / ETA correction | Complete (Loop 007) |
 | EXP-006 | Rerouting evaluation: 5 voyages × 5 vessels × 6 scenarios | Complete (Loop 008) |
+| EXP-007 | Simulation lab: engine parity, host vs. Docker, performance | Complete (Loop 009) |
 
 The field list used for EXP-001 (Scenario, Start, Destination, Vessel,
 Weather, Algorithms, Constraints, Metrics, Results, Observations,
@@ -437,6 +438,49 @@ forecast weather; draft-aware routing; counterfactual "missed beneficial
 reroute" measurement. All results are simulated with synthetic weather and
 a synthetic-data speed model; they show the controller's behaviour, not
 real-world benefit.
+
+---
+
+## EXP-007 — Simulation lab: parity and performance
+
+**Status:** Complete. Loop 009, 2026-10-03.
+
+**Engine parity (measured):**
+
+- After refactoring `simulate()` onto `rerouting.Voyage`, the full EXP-006
+  matrix re-run gave `runs.csv` identical to the committed baseline
+  (excluding `wall_s`), and all events and summary files byte-identical.
+- A lab session with preset `storm_ahead` (Cochin → Dubai, General Cargo)
+  matches `compare_voyage(..., "adverse")`: identical tracks, 103.34 h vs.
+  127.68 h, R1 at step 2. Preset `moving_storm` via the API gives 106.6 h vs.
+  118.2 h, the same as scenario `shifting` in EXP-003.
+
+**Host vs. Docker (`tools/lab_parity.py`, Cochin → Dubai, General Cargo):**
+
+| Sequence | Steps | Reroutes | With → without rerouting (h) | Host == Docker |
+| --- | --- | --- | --- | --- |
+| manual storm (18.0°N 66.5°E, σ 150 km, +6 m) applied at step 2 | 42 | 1 | 106.0 vs. 135.0 | identical full state |
+| preset `moving_storm` | 43 | 3 | 106.6 vs. 118.2 | identical full state |
+| manual storm, rerouting off | 39 | 0 | 135.0 vs. 135.0 | identical full state |
+
+"Identical full state" covers every route and track point, timeline
+message, decision detail and metric; only session ids were excluded.
+
+**Performance (host, single measurements):**
+
+| Operation | Time |
+| --- | --- |
+| Create session (first for a vessel/sea state, includes the base cost grid) | 2.3 s |
+| Create session (base grid cached) | 1.1 s |
+| Step without weather change | < 0.01 s |
+| Apply weather (new ML cost grid) | 1.16 s |
+| Step with a reroute search | 0.37 s |
+| Overlay PNG render / cached re-fetch | 0.11 s (109 KB) / ≈ 0 s |
+| Full voyage via API: manual storm / moving_storm preset | 2.2 s / 18.6 s (Docker: 2.1 s / 16.3 s) |
+
+Session state response: 30–55 KB per request (routes + track ≈ 21 KB,
+timeline ≤ 32 KB). Disturbed cost grid: 16.5 MB each, ≤ 2 per session.
+Server process max RSS in the measurement script: 625 MB.
 
 ---
 

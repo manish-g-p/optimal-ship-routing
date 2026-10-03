@@ -34,7 +34,8 @@ The default grid resolution is `0.05` degrees, approximately 5.5 km per cell.
 - Simulated dynamic rerouting: a vessel advances along its route, weather
   changes, and a threshold-based controller reroutes from the current
   position when the alternative is sufficiently better. Available in the
-  Flask app ("Voyage simulation" mode) and from the console.
+  Flask app ("Voyage replay" mode: whole voyage at once; "Simulation lab"
+  mode: step by step with manual weather) and from the console.
 
 ## Requirements
 
@@ -133,6 +134,14 @@ The Flask server exposes:
 | `GET` | `/api/weather_image?scenario=rough` | Wave overlay PNG |
 | `POST` | `/api/route` | Calculate one or both routes |
 | `POST` | `/api/simulate` | Simulated voyage with weather-driven rerouting, compared with the same voyage without rerouting |
+| `GET` | `/api/sim/presets` | Simulation-lab demonstration scenarios, input limits, default rerouting settings |
+| `POST` | `/api/sim/sessions` | Create a Simulation-lab session (`origin`, `dest`, `vessel`, `base_weather`, `preset`, `rerouting_enabled`, `config`) |
+| `GET`, `DELETE` | `/api/sim/sessions/<id>` | Current session state / delete the session |
+| `POST` | `/api/sim/sessions/<id>/step` | Advance one step; body `{"expected_step": n}` (rejects duplicates with 409) |
+| `POST` | `/api/sim/sessions/<id>/weather` | Set the pending disturbance list `{"disturbances": [{lat, lon, radius_km, delta_m}]}` |
+| `POST` | `/api/sim/sessions/<id>/weather/apply` · `/weather/discard` | Apply pending weather now / discard it |
+| `POST` | `/api/sim/sessions/<id>/schedule/cancel` · `/reset` | Cancel remaining preset updates / reset to step 0 |
+| `GET` | `/api/sim/sessions/<id>/weather_image?v=<version>` | PNG of the applied wave field (base + disturbances) |
 
 Example route request in PowerShell:
 
@@ -212,6 +221,41 @@ All simulation figures are model estimates: the weather changes are synthetic
 and the speed model was trained on synthetic data. They are not real-world
 voyage performance.
 
+### Simulation lab (interactive)
+
+In the Flask app, choose **Simulation lab**. Pick ports, a vessel, a
+Typical/Rough sea state and optionally a demonstration scenario, then
+**Start** (automatic stepping), **Pause**, **Step** (one step) or
+**Reset**. During the voyage you can add storms or calm patches. Use
+**Place on map** and click the map, or type coordinates; set a peak
+wave-height change and a radius (1σ of a Gaussian). You can also drag a
+circle to move it, or select one to edit or remove it.
+
+Edits are *pending* (white outline, "pending" badge) and the routing
+engine does not see them until you click **Apply now** or take the next
+step. The backend then evaluates the active route under the new weather
+and reroutes only if the existing threshold controller decides to. The
+map shows:
+
+- the initial plan (dashed grey);
+- the active route (blue);
+- the sailed track (green);
+- the vessel;
+- reroute points R1, R2, …;
+- the disturbances;
+- an overlay rendered from the applied weather field.
+
+The timeline lists every backend decision with its triggers, costs, the
+alternative found and the gain. The metrics compare the voyage with the
+same voyage without rerouting under the same weather.
+
+Only significant wave height is simulated; wave period and direction stay
+as in the base sea state. Sessions live in the server's memory: up to 8,
+expiring after 30 minutes idle, and a server restart discards them. All
+values are model estimates, not real-world performance. Browser check:
+`node tools/lab_e2e.mjs <outdir>`; environment comparison:
+`python tools/lab_parity.py <url> <out.json>`.
+
 ### Rerouting evaluation
 
 ```bash
@@ -255,10 +299,13 @@ src/ml_model.py           Speed-model training and inference
 src/evaluate.py           Route comparison and metrics
 src/rerouting.py          Rerouting controller and voyage simulation
 src/evaluate_rerouting.py Rerouting-on vs. rerouting-off evaluation matrix
+src/sim_session.py        Interactive Simulation-lab sessions (step, weather edits, timeline)
 src/weather_sim.py        Synthetic weather updates for rerouting scenarios
 src/ports.py              Port catalogue and coordinates
 src/vessel.py             Vessel profiles
 tests/                    Routing and rerouting tests (unittest)
+tools/lab_e2e.mjs         Headless-browser end-to-end check of the web app
+tools/lab_parity.py       Deterministic Simulation-lab API run (host vs. Docker)
 web/                      Flask frontend files
 data/processed/           Generated routing and model artifacts (route-planning baseline)
 data/rerouting_eval/      Rerouting evaluation outputs (python -m src.evaluate_rerouting)
