@@ -24,6 +24,7 @@ current Source of Truth (2026-10-03).
 | 009 | Tests use stdlib `unittest` and committed data | **Confirmed** |
 | 010 | Rerouting UI: Flask only, via `/api/simulate`; logic stays in `src/` | **Confirmed** (hours source amended by 011) |
 | 011 | Metric semantics: distance / cost / travel time; ML time model for all routes | **Confirmed** |
+| 012 | Rerouting evaluation design (matrix, pairing, statuses, outcome tolerance, outputs) | **Confirmed** |
 
 ---
 
@@ -238,12 +239,44 @@ Cochin → Dubai (92.1 vs 83.1 h), when under the ML model it is faster
 4× multiplier cap binds on 0.5% of moves (`rough`, General Cargo) and
 floors speed at service ÷ 4, about the model's own minimum prediction.
 
+## Decision 012 — Rerouting evaluation design — CONFIRMED
+
+**Decision (Loop 008):** `src/evaluate_rerouting.py`, results in EXP-006.
+
+- **Matrix:** all 5 `evaluate.VOYAGES` × all 5 vessel profiles × all 6
+  `weather_sim` scenarios (each covers a distinct behaviour: stable,
+  adverse, worsening, improving alternative, minor, moving storm). Base
+  weather `typical` only (the scenarios were designed on it). 150
+  combinations, ~9 min.
+- **Pairing:** one `rerouting.compare_voyage` call per combination, so the
+  rerouting-on and -off runs share departure weather, initial route and
+  weather schedule; only the controller differs.
+- **Configuration:** default `RerouteConfig`, unchanged and **not tuned on
+  these results**. Recorded per run (`config` column) and in `config.json`.
+- **Statuses:** every combination is run and classified `ok`,
+  `draft_infeasible` (any sailed track shallower than the draft),
+  `incomplete` or `failed`. Only `ok` runs enter averages; the others are
+  counted, never dropped.
+- **Outcome:** Δ = with − without rerouting (simulated hours). Improved if
+  Δ ≤ −0.1 h, worsened if Δ ≥ +0.1 h, else unchanged. Relative change is
+  undefined (None) for missing or non-positive baselines.
+- **Outputs** go to `data/rerouting_eval/`, separate from the
+  route-planning baseline in `data/processed/`. `wall_s` is the only
+  non-deterministic column.
+
 ---
 
 ## Unresolved choices
 
-- **Next goal:** multi-voyage static-vs-dynamic evaluation (Phase 4
-  remainder) is proposed in `TASKS.md` but not confirmed by the user.
+- **Next goal:** see `TASKS.md` (candidates: draft-aware navigability and
+  model skew; completing the baseline with `rough` weather and threshold
+  sensitivity; Phase 5). Not confirmed by the user.
+- **Draft handling:** whether navigability should depend on vessel draft
+  (and with what under-keel clearance), or draft-infeasible voyages should
+  be rejected. See `BLOCKERS.md` C10.
+- **Moving weather:** whether the controller should account for weather
+  that will change (e.g. forecasts), given that it assumes current weather
+  persists. See C11. Not a decision for an evaluation goal.
 - **A* heuristic:** whether to correct the latitude scaling (possible
   overestimate north of ~13.5°N). See `BLOCKERS.md` C3.
 - **Rejected-alternative re-search:** the controller does not re-search

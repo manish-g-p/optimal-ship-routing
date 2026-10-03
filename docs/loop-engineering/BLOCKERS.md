@@ -1,6 +1,6 @@
 # Blockers and Open Concerns
 
-**Last reviewed:** 2026-10-03 (Loop 007), working tree on top of `1fd131d`.
+**Last reviewed:** 2026-10-03 (Loop 008), working tree on top of `e7597a1`.
 
 - **Blocker:** prevents the current/next goal from being done or validated.
 - **Open concern:** a known correctness issue, risk or limitation that
@@ -88,6 +88,39 @@ still the developer's decision; no loop has assumed or acted on it.
 Pinned in `requirements.txt`; still not imported anywhere (re-checked in
 Loop 005 with a repo-wide grep). Remove only as part of a deliberate
 dependency change.
+
+### C10 — Vessel draft is not used by routing (correctness gap, found in Loop 008)
+
+The navigable grid applies one minimum depth (`config.MIN_DEPTH_M = 10 m`)
+to every vessel. Drafts are 9.0–20.5 m, so deep-draft vessels can be
+routed through water shallower than their draft. Measured: the Kandla →
+Cochin planned route reaches 16 m depth, so the VLCC (20.5 m) is
+infeasible there. Other planned routes reach ≥ 23 m (≥ 25 m for all but
+General Cargo on Cochin → Dubai), enough for every draft. No under-keel
+clearance is modelled. The rerouting evaluation flags these runs
+(`draft_infeasible`), but the Flask/Streamlit apps and route planning do
+not check draft.
+
+### C11 — Rerouting can make voyages slower under moving weather (found in Loop 008)
+
+In EXP-006, 6 of 144 valid pairs were slower with rerouting (+0.6 to
++8.3 h), all in the `shifting` scenario, on Visakhapatnam → Colombo (4
+vessels) and Chennai → Port Blair (2). Each adopted reroute was cheaper
+under the weather at decision time. The controller assumes current
+weather persists, so a storm that moves can invalidate a decision.
+Hypothesis (not verified): more likely when the storm's alternate
+positions are close to the route (163–167 km on these voyages vs.
+184–231 km elsewhere). This is a property of the baseline policy, to be
+reported, not tuned away.
+
+### C12 — Evaluation gaps
+
+Not measured in EXP-006: `rough` base weather; threshold and cooldown
+sensitivity; missed beneficial reroutes (5 rejected alternatives had
+2.3–2.7% gain, just under the 3% threshold, but would need a
+counterfactual run). The scenarios and thresholds were designed on one of
+the 25 voyage-vessel pairs (Cochin → Dubai, General Cargo), so that pair
+is in-sample.
 
 ### C9 — Pre-existing web UI warnings (seen in Loop 006 browser check)
 

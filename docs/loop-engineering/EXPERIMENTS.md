@@ -12,6 +12,7 @@ experiments are listed at the end and have **no results**.
 | EXP-003 | Weather-driven dynamic rerouting scenarios | Complete (Loop 004; re-run Loop 005) |
 | EXP-004 | Voyage simulation through the Flask API/UI | Complete (Loop 006) |
 | EXP-005 | Travel-time / ETA correction | Complete (Loop 007) |
+| EXP-006 | Rerouting evaluation: 5 voyages × 5 vessels × 6 scenarios | Complete (Loop 008) |
 
 The field list used for EXP-001 (Scenario, Start, Destination, Vessel,
 Weather, Algorithms, Constraints, Metrics, Results, Observations,
@@ -310,12 +311,141 @@ before → after.** All other non-timing columns are identical.
 
 ---
 
+## EXP-006 — Rerouting evaluation across voyages, vessels and scenarios
+
+**Status:** Complete. Loop 008, 2026-10-03. Command:
+`python -m src.evaluate_rerouting`. Outputs in `data/rerouting_eval/`
+(`runs.csv` one row per pair, `events.csv`, `summary_*.csv`,
+`config.json`, `rel_change_vessel_scenario.png`). Run twice; the
+non-timing outputs were identical (`VALIDATION.md` → Loop 008).
+
+**Setup:** the 5 `evaluate.VOYAGES` × all 5 vessel profiles × all 6
+`weather_sim` scenarios = 150 combinations. Base weather `typical`; A* with
+the ML speed cost; travel time per Source of Truth §10.1; default
+`RerouteConfig` (cells/step 10, eval interval 1, cooldown 3, wave trigger
+4.0 m, cost trigger 5%, re-check 4, min gain 3% and 20 units), **not
+tuned on these results**. Each combination is one pair from
+`rerouting.compare_voyage`: same departure weather, initial route and
+weather schedule, rerouting enabled vs. disabled. Outcome tolerance:
+|Δ| < 0.1 h = unchanged.
+
+**Caveat on independence:** the scenarios and default thresholds were
+designed in Loop 004 on Cochin → Dubai with General Cargo. That pair is
+in-sample; the other 24 voyage-vessel pairs were not used for tuning.
+In-sample mean change −8.9% vs. −8.0% for the rest.
+
+### Measured results (simulation, model estimates)
+
+**Run status:** 150 runs: 144 `ok`, 6 `draft_infeasible`, 0 incomplete,
+0 failed. All 6 draft-infeasible runs are VLCC (20.5 m draft) on Kandla →
+Cochin. Both the static and the rerouted track pass through 16 m of
+water. The navigable grid enforces only a 10 m minimum depth for all
+vessels. These runs are in `runs.csv` but excluded from the averages.
+
+**Overall (144 ok pairs):** improved 88, unchanged 50, worsened 6. Mean
+travel time 84.25 h without → 76.91 h with rerouting (mean Δ −7.33 h,
+mean −8.0%, median −5.0%, best −30.4%, worst +8.4%). 139 reroutes in 94
+runs. 102 alternatives rejected below threshold, 97 evaluations blocked
+by cooldown, 0 failed searches.
+
+| Scenario | ok | improved / unchanged / worsened | reroutes | mean Δ h | mean % | worst % | mean Δ km |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| stable | 24 | 0 / 24 / 0 | 0 | 0.00 | 0.0 | 0.0 | 0 |
+| adverse | 24 | 24 / 0 / 0 | 24 | −17.24 | −19.0 | −8.5 | +78 |
+| worsening | 24 | 24 / 0 / 0 | 27 | −16.77 | −18.5 | −8.5 | +71 |
+| improving_alt | 24 | 22 / 2 / 0 | 22 | −6.85 | −7.6 | 0.0 | −182 |
+| minor | 24 | 0 / 24 / 0 | 0 | 0.00 | 0.0 | 0.0 | 0 |
+| shifting | 24 | 18 / 0 / 6 | 66 | −3.14 | −3.0 | +8.4 | +174 |
+
+| Vessel | ok | improved / unchanged / worsened | mean Δ h | mean % | worst % |
+| --- | --- | --- | --- | --- | --- |
+| Bulk Carrier (Panamax) | 30 | 19 / 10 / 1 | −9.28 | −8.3 | +8.4 |
+| Container Ship | 30 | 19 / 11 / 0 | −4.74 | −7.3 | 0.0 |
+| Crude Oil Tanker (VLCC) | 24 | 14 / 8 / 2 | −7.51 | −7.6 | +8.4 |
+| General Cargo | 30 | 19 / 10 / 1 | −9.65 | −9.7 | +8.3 |
+| LNG Carrier | 30 | 17 / 11 / 2 | −5.52 | −7.1 | +6.8 |
+
+| Voyage | ok | improved / unchanged / worsened | mean Δ h | mean % | worst % |
+| --- | --- | --- | --- | --- | --- |
+| Mumbai → Chennai | 30 | 20 / 10 / 0 | −7.72 | −6.5 | 0.0 |
+| Kandla → Cochin | 24 | 16 / 8 / 0 | −5.54 | −7.7 | 0.0 |
+| Cochin → Dubai | 30 | 20 / 10 / 0 | −8.36 | −7.3 | 0.0 |
+| Visakhapatnam → Colombo | 30 | 16 / 10 / 4 | −7.02 | −8.5 | +8.4 |
+| Chennai → Port Blair | 30 | 16 / 12 / 2 | −7.68 | −10.0 | +4.3 |
+
+**Worsened runs (all `shifting`, all with 3 reroutes at steps 1, 5, 9):**
+
+| Voyage | Vessel | without → with (h) | Δ km |
+| --- | --- | --- | --- |
+| Visakhapatnam → Colombo | Bulk Carrier | 97.91 → 106.15 (+8.25) | +471 |
+| Visakhapatnam → Colombo | VLCC | 81.49 → 88.32 (+6.83) | +404 |
+| Visakhapatnam → Colombo | General Cargo | 89.82 → 97.26 (+7.45) | +553 |
+| Visakhapatnam → Colombo | LNG Carrier | 67.15 → 71.68 (+4.53) | +373 |
+| Chennai → Port Blair | VLCC | 83.55 → 84.18 (+0.63) | +193 |
+| Chennai → Port Blair | LNG Carrier | 67.21 → 70.07 (+2.86) | +193 |
+
+**Controller behaviour (from `events.csv`, ok runs only):**
+
+- Adopted-alternative gain under the weather at decision time: adverse
+  8.8–31.9% (median 20.0%), worsening 3.1–19.9% (median 8.0%),
+  improving_alt 4.5–18.3% (median 6.3%), shifting 3.5–47.8% (median
+  21.4%).
+- Rejected alternatives: gain 0–2.67%. 5 were ≥ 2% (just under the 3%
+  threshold), including the 2 `improving_alt` runs with no reroute
+  (Chennai → Port Blair, Container Ship and LNG Carrier, 2.32% / 2.34%).
+- In the 94 runs with a reroute: 66 longer and faster, 22 shorter and
+  faster (all `improving_alt`), 6 longer and slower (the worsened runs).
+- Execution: 533 s for 150 pairs; mean 3.5 s, max 10.0 s per pair (run 1,
+  partly concurrent with the test suite).
+
+### Observations
+
+- Stable and minor weather produced **no route changes** in all 48 ok
+  runs. In `minor` the controller searched (periodic re-check) and
+  rejected gains ≤ 0.13%.
+- Adverse and worsening storms on the route ahead were rerouted around in
+  every ok run, with large simulated gains and modestly longer distance.
+- Every worsened run is `shifting` and on one of two voyages. In run 95
+  (Visakhapatnam → Colombo, Bulk Carrier) each of the 3 adopted reroutes
+  was 32.7%, 4.1% and 10.2% cheaper under the weather at decision time,
+  yet the realized voyage was 8.25 h slower and 471 km longer than staying
+  on the original route.
+- Benefits are similar across vessels in relative terms (−7.1% to −9.7%
+  mean). In hours, slower vessels gain more (Container Ship −4.7 h vs.
+  General Cargo −9.7 h on average).
+- Cooldown blocked 97 evaluations (92 in `shifting`). This matrix has no
+  no-cooldown counterpart, so its net effect is not measured here (EXP-003
+  showed 12 vs. 3 changes for one pair).
+
+### Hypotheses (not verified)
+
+- **Moving-weather worsening:** each decision assumes the current weather
+  persists. When the storm moves, a detour chosen for the current position
+  can lie under the next position. Supporting measurement: on the two
+  affected voyages the `shifting` side positions are 163–167 km from the
+  planned route; on the other three, 184–231 km (storm width σ = 200 km).
+  So detours are more likely to meet the next storm. 5 voyages are too few
+  to confirm.
+- **Threshold near-misses:** the 5 rejected alternatives at 2.3–2.7% may
+  have been beneficial. Not measured: that would need a counterfactual run
+  that adopts them.
+
+### Not covered
+
+Base weather `rough`; non-default thresholds (sensitivity); real or
+forecast weather; draft-aware routing; counterfactual "missed beneficial
+reroute" measurement. All results are simulated with synthetic weather and
+a synthetic-data speed model; they show the controller's behaviour, not
+real-world benefit.
+
+---
+
 ## Planned experiments (not run — no results)
 
-- **Static vs. dynamic across the fixed voyage set** (`evaluate.VOYAGES`)
-  and several vessel profiles, including `rough` base weather (Phase 4).
-  Should measure missed beneficial and unnecessary reroutes (Source of
-  Truth §11.2) and threshold sensitivity.
+- ~~Static vs. dynamic across the fixed voyage set and vessels~~ — done
+  as EXP-006 (`typical` base). Still planned: `rough` base weather,
+  threshold/cooldown sensitivity, and counterfactual missed-reroute
+  measurement.
 - **ETA consistency check** once the next goal changes ETA: reported time
   vs. ML-cost-derived time per route (Phase 3).
 - **A* heuristic admissibility** on northern east–west voyages, e.g.

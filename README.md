@@ -212,6 +212,21 @@ All simulation figures are model estimates: the weather changes are synthetic
 and the speed model was trained on synthetic data. They are not real-world
 voyage performance.
 
+### Rerouting evaluation
+
+```bash
+python -m src.evaluate_rerouting
+```
+
+Runs every evaluation voyage with every vessel profile under each simulated
+weather scenario, twice: once with rerouting and once without (150 pairs,
+about 9 minutes). It writes per-run results, rerouting events, summaries by
+voyage, vessel and scenario, the configuration used, and a heatmap to
+`data/rerouting_eval/`. Each run is classified `ok`, `draft_infeasible`,
+`incomplete` or `failed`. Only `ok` runs enter the averages. These outputs
+are separate from the route-planning baseline in `data/processed/`.
+Results are simulated, model-based estimates, not real-world performance.
+
 ### Tests
 
 ```bash
@@ -220,8 +235,8 @@ python -m unittest discover -s tests -v
 
 The tests use the committed `data/processed/` artifacts and need no network.
 They check the initial evaluation routes, rerouting from a vessel's current
-position, the dynamic rerouting scenarios, and the Flask API (`/api/route`,
-`/api/simulate`).
+position, the dynamic rerouting scenarios, the Flask API (`/api/route`,
+`/api/simulate`) and the integrity of the rerouting evaluation.
 
 ## Repository Contents
 
@@ -239,12 +254,14 @@ src/live_weather.py       Optional live weather support
 src/ml_model.py           Speed-model training and inference
 src/evaluate.py           Route comparison and metrics
 src/rerouting.py          Rerouting controller and voyage simulation
+src/evaluate_rerouting.py Rerouting-on vs. rerouting-off evaluation matrix
 src/weather_sim.py        Synthetic weather updates for rerouting scenarios
 src/ports.py              Port catalogue and coordinates
 src/vessel.py             Vessel profiles
 tests/                    Routing and rerouting tests (unittest)
 web/                      Flask frontend files
-data/processed/           Generated routing and model artifacts
+data/processed/           Generated routing and model artifacts (route-planning baseline)
+data/rerouting_eval/      Rerouting evaluation outputs (python -m src.evaluate_rerouting)
 ```
 
 ## Configuration

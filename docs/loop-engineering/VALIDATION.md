@@ -8,8 +8,11 @@ written or a command ran once without error.
 Standard checks for routing/rerouting changes:
 
 ```bash
-python -m unittest discover -s tests -v          # 41 tests (Loop 007), ~80 s
+python -m unittest discover -s tests -v          # 55 tests (Loop 008), ~2-2.5 min
 python -m src.rerouting                          # scenario table (EXP-003)
+python -m src.evaluate_rerouting                 # 150-pair matrix, ~9 min (EXP-006); to check
+                                                 # reproducibility, copy data/rerouting_eval/ first,
+                                                 # re-run, compare all files (runs.csv excl. wall_s)
 python -m src.evaluate                           # then diff evaluation.csv vs. the committed
                                                  # file excluding trad_sec/prop_sec; restore it
 docker build -f docker/Dockerfile -t nautilus-dev .
@@ -32,10 +35,61 @@ docker run --rm --network none nautilus-dev python -m unittest discover -s tests
 - [ ] Results recorded in `EXPERIMENTS.md`; docs updated per
       `README.md` → Maintenance convention.
 
-## Validation slot — next goal (multi-voyage static-vs-dynamic evaluation)
+## Validation slot — next goal (not yet chosen; see `TASKS.md`)
 
-Not started. Record here the checks run and their actual outcomes.
-Metric semantics to use: Source of Truth §10.1.
+Not started. Record here the checks run and their actual outcomes. If the
+change could affect routes or rerouting, re-run
+`python -m src.evaluate_rerouting` and compare with the committed
+`data/rerouting_eval/` (EXP-006 baseline), not only the unit tests.
+
+---
+
+## Loop 008 — rerouting evaluation (checks run in this loop)
+
+All on the working tree on top of `e7597a1`; thresholds and rerouting
+code unchanged.
+
+- [x] `python -m unittest discover -s tests` (host): **Ran 55 tests in
+      139.4 s — OK** (41 existing + 14 new in `test_evaluate_rerouting.py`;
+      run concurrently with evaluation run 1, so slower than usual). The
+      new tests alone: **Ran 14 tests in 26.2 s — OK**. They cover:
+      - full 150-combination coverage;
+      - run statuses, including a real `draft_infeasible` case
+        (VLCC, Kandla → Cochin);
+      - relative-change edge cases (zero, negative, NaN, inf, None
+        baselines);
+      - outcome classification and paired-metric consistency;
+      - matched initial conditions of the paired runs;
+      - no reroute ⇒ identical voyages;
+      - deterministic weather scenarios;
+      - a failed run recorded and excluded from `ok`;
+      - summaries matching the detail rows;
+      - event rows tied to runs;
+      - a repeated subset run identical except `wall_s`.
+- [x] `python -m src.evaluate_rerouting`, run 1: **150 pairs in 533 s; 144
+      `ok`, 6 `draft_infeasible`, 0 incomplete, 0 failed** (EXP-006).
+- [x] Run 2 (same command, same code): 150 pairs in 494 s. Compared with
+      run 1: `runs.csv` identical except `wall_s`; `events.csv`, all four
+      `summary_*.csv` and `config.json` **byte-identical**.
+- [x] The heatmap code was changed after the runs (labels, n, worsened
+      count, title); the PNG was regenerated from run 2's `runs.csv`. This
+      does not affect any CSV.
+- [x] Route-planning baseline: `python -m src.evaluate` output identical
+      to the committed `data/processed/evaluation.csv` except timing
+      columns. The committed file was restored; `data/processed/` is
+      unchanged in git.
+- [x] Docker: image rebuilt; `--network none` **Ran 55 tests in 106.7 s —
+      OK**. The full matrix in the container (`--network none`): **150
+      pairs in 546 s, 144 ok / 6 draft_infeasible**. Its `runs.csv` (copied
+      out with `docker cp`) is identical to the host's except `wall_s`, and
+      `summary_overall.csv` is byte-identical.
+- [x] Docs audit: every headline number in EXP-006 matched against
+      `summary_overall.csv`; event statistics recomputed on ok runs only
+      (the first draft had used all runs, now corrected); no broken links;
+      all referenced identifiers exist.
+- [ ] Not done: `rough` base weather, threshold sensitivity,
+      counterfactual missed-reroute measurement (out of scope; `BLOCKERS.md`
+      C12).
 
 ---
 

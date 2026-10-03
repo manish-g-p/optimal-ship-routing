@@ -3,7 +3,7 @@
 **Project:** Nautilus
 **Category:** ML-Assisted Dynamic Ship Routing System
 **Primary Focus:** Weather-Aware Rerouting and Machine Learning
-**Status (2026-10-03):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented, and the simulation can be run and inspected in the Flask UI. Route cost, distance and travel time now have defined, tested semantics (§10.1). Next: to be decided (see `docs/loop-engineering/TASKS.md`). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
+**Status (2026-10-03):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented, and the simulation can be run and inspected in the Flask UI. Route cost, distance and travel time now have defined, tested semantics (§10.1). The threshold-based controller has been evaluated across all voyages, vessels and weather scenarios (§11.5). Next: to be decided (see `docs/loop-engineering/TASKS.md`). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
 
 ---
 
@@ -207,7 +207,8 @@ As of 2026-10-03:
 * **Threshold-based dynamic rerouting (simulation):** `src/weather_sim.py` (deterministic simulated weather updates) and `src/rerouting.py` (vessel progress along the active route, remaining-route evaluation, configurable triggers, cooldown, improvement thresholds, rerouting event log). Defaults are the `REROUTE_*` settings in `config.py`. Run it with `python -m src.rerouting`.
 * **Flask UI integration:** "Voyage simulation" mode and `POST /api/simulate` run a voyage with and without rerouting. They show the initial plan, the sailed track, reroute points, weather changes, a progress slider, and each rerouting evaluation with its reason. The Streamlit app does not include it.
 * **Consistent travel time:** routes report travel time from the ML speed model for the selected vessel and weather, the same model the weather-aware cost uses (§10.1).
-* Not yet implemented: static-vs-dynamic evaluation across the fixed voyage set and vessel profiles, and ML rerouting decisions (§8.2).
+* **Rerouting evaluation:** `python -m src.evaluate_rerouting` compares rerouting-enabled and rerouting-disabled voyages across the fixed voyage set, all vessel profiles and all simulated weather scenarios (§11.5).
+* Not yet implemented: ML rerouting decisions (§8.2).
 
 ---
 
@@ -567,6 +568,16 @@ The existing fixed voyage evaluation set can be reused as a starting point.
 * Record the conditions under which each result was obtained.
 * Separate algorithm correctness from model quality.
 
+### 11.5 Threshold-Based Rerouting Baseline (measured 2026-10-03)
+
+`python -m src.evaluate_rerouting` runs 5 voyages × 5 vessel profiles × 6 simulated weather scenarios (`typical` base weather, default thresholds). Each combination runs as a pair: the same voyage with rerouting enabled and disabled. Outputs: `data/rerouting_eval/`. Full analysis: `docs/loop-engineering/EXPERIMENTS.md` EXP-006.
+
+* 150 combinations: 144 valid, 6 draft-infeasible (VLCC on Kandla → Cochin passes through 16 m of water; draft 20.5 m), 0 failed.
+* Of 144 valid pairs: 88 faster with rerouting, 50 unchanged (all stable and minor-change runs, plus 2 near-threshold cases), 6 slower. Mean simulated travel-time change −8.0% (median −5.0%; range −30.4% to +8.4%).
+* All 6 slower cases occur with a storm that moves every step: decisions that were cheaper under the weather at decision time turned out worse once the storm moved.
+
+This is the baseline that any ML-based rerouting decision (§8.2) must be compared against. The results are model-based simulations, not real-world performance.
+
 ---
 
 ## 12. Application and Visualization
@@ -689,6 +700,8 @@ The following limitations should be considered during implementation.
 ### Route Evaluation
 
 * ETA and route cost were inconsistent until 2026-10-03 (constant 18 kn ETA); now defined in §10.1. Travel time is only as good as the synthetic-data speed model.
+* The navigable grid applies one 10 m minimum depth to all vessels. Vessel draft is not used in routing, so deep-draft vessels can be routed through water shallower than their draft. The evaluation flags this case (VLCC, Kandla → Cochin) but does not prevent it.
+* Rerouting decisions assume the current weather persists. Under moving weather they can make a voyage slower (§11.5).
 * Dynamic and static routes must be compared under equivalent assumptions.
 * Simulation results may not reflect actual maritime operations.
 
@@ -752,7 +765,7 @@ Tasks:
 
 ### Phase 4 — Evaluation and Visualization
 
-**Status:** Partly done (2026-10-03). A console scenario evaluation (`python -m src.rerouting`) exists, and simulated voyages and route changes can be shown in the Flask UI. Not yet done: extending the fixed voyage evaluation to static-vs-dynamic comparisons across voyages and vessels.
+**Status:** Done (2026-10-03). Simulated voyages and route changes can be shown in the Flask UI. Static-vs-dynamic evaluation runs across all voyages, vessels and scenarios (§11.5). Not covered: `rough` base weather and threshold sensitivity.
 
 **Objective:** Demonstrate and measure the rerouting workflow.
 

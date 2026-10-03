@@ -9,6 +9,35 @@ task: TASK-002" are historical; see `README.md`.
 
 ---
 
+## Loop 008 — Rerouting evaluation across voyages and vessels
+
+**Date:** 2026-10-03
+**Branch / commit:** `feature/dynamic-routing`, on top of `e7597a1`
+(uncommitted when written)
+**Task:** User-directed: reproducible evaluation of threshold-based
+rerouting vs. no rerouting across the 5 voyages, all vessels and the
+weather scenarios (Source of Truth Phase 4, §11).
+
+**What was done:** Inspected `evaluate.py`, `rerouting.py`,
+`weather_sim.py`, the CSV format and tests. Probed feasibility: the grid
+ignores draft, and the VLCC cannot use the Kandla → Cochin route (16 m
+water). Measured pair run time (3–9 s). Added `src/evaluate_rerouting.py`
+(matrix, paired runs via `compare_voyage`, statuses, metrics, summaries,
+config record, heatmap) and `tests/test_evaluate_rerouting.py` (14
+tests). Ran the full matrix twice. Analysed the worsened runs (event
+logs; storm-position geometry). Improved the heatmap after reviewing it:
+rotated labels, per-cell n and worsened count, corrected the title (the
+VLCC cells average 4 voyages, not 5). Thresholds were not changed.
+
+**Validation:** `VALIDATION.md` → Loop 008. Results: EXP-006.
+
+**Decision:** Done (Decision 012). Two findings recorded as concerns:
+draft not modelled (C10), worse outcomes under moving weather (C11).
+
+**Next:** Awaiting user confirmation (`TASKS.md`).
+
+---
+
 ## Loop 007 — Route cost, travel time and ETA consistency
 
 **Date:** 2026-10-03

@@ -11,34 +11,37 @@ Status values: `DONE`, `NEXT` (proposed or confirmed), `BACKLOG`,
 
 ## Current goal
 
-None in progress. The last implementation goal (route cost / travel time
-consistency, Loop 007) is `DONE`.
+None in progress. The last implementation goal (rerouting evaluation
+across voyages and vessels, Loop 008) is `DONE`.
 
 ## Next goal — `NEXT` (proposed, needs user confirmation)
 
-**Static-vs-dynamic evaluation across voyages and vessels** — the rest of
-Source of Truth Phase 4 (§11).
+All Source of Truth roadmap phases except optional Phase 5 are now done.
+Candidates, in suggested order. None is decided by the user.
 
-Why this one: it is the only roadmap item left before the optional Phase 5,
-and the measurements so far (EXP-003/004) cover one voyage only. They
-show the benefit of rerouting depends on vessel and settings. Proposed
-scope, to be confirmed:
-
-- Extend the existing evaluation to run `rerouting.compare_voyage` over
-  `evaluate.VOYAGES`, several vessel profiles and the weather scenarios.
-- Report travel time, distance, number of reroutes, unnecessary and
-  missed reroutes, and rerouting computation time (§11.2), using the
-  Loop 007 metric definitions.
-- Record threshold sensitivity, without changing the default policy.
-
-Smaller open item that could go first: resolve the scikit-learn pickle
-skew of the speed model (`BLOCKERS.md` C5, Phase 3 remainder).
-
-This was **not** decided by the user.
+1. **Address the two defects the evaluation exposed** (correctness, small):
+   - draft-aware navigability, so deep-draft vessels are not routed through
+     water shallower than their draft (`BLOCKERS.md` C10);
+   - the scikit-learn model-artifact skew (C5).
+2. **Complete the rule-based baseline before Phase 5:** run the evaluation
+   on `rough` base weather and with a small threshold/cooldown sensitivity
+   grid, as separate, labelled experiments. Measure counterfactual missed
+   reroutes. This makes the baseline that Phase 5 must beat explicit.
+3. **Phase 5 (optional):** an experimental ML rerouting-decision model,
+   compared with the EXP-006 baseline on held-out scenarios.
 
 ---
 
 ## Completed goals
+
+### Rerouting evaluation across voyages, vessels and scenarios (Phase 4) — `DONE`
+
+Loop 008, 2026-10-03 (uncommitted when written). `src/evaluate_rerouting.py`
+runs 150 rerouting-on/off pairs (5 voyages × 5 vessels × 6 scenarios,
+`typical` base, default thresholds, not tuned). Results: 144 ok, 6
+draft-infeasible, 0 failed; 88 improved, 50 unchanged, 6 worsened (all
+`shifting`). Outputs: `data/rerouting_eval/`. Evidence: EXP-006,
+`tests/test_evaluate_rerouting.py`, `VALIDATION.md` → Loop 008.
 
 ### Route cost, travel time and ETA consistency (Phase 3 + Phase 1 ETA item) — `DONE`
 
@@ -104,7 +107,7 @@ Loop 007.
 | 1 — Rerouting foundation | `DONE` (ETA/cost item in Loop 007) |
 | 2 — Weather updates and rerouting triggers | `DONE` (simulation) |
 | 3 — ML speed prediction integration | `DONE` except model artifact skew (C5) |
-| 4 — Evaluation and visualization | Partly `DONE` (UI, Loop 006); multi-voyage evaluation `NEXT` (proposed) |
+| 4 — Evaluation and visualization | `DONE` (UI Loop 006; evaluation Loop 008) |
 | 5 — Experimental ML rerouting decisions | `BACKLOG` (optional) |
 
 ---

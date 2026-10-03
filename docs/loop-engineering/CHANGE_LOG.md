@@ -9,6 +9,23 @@ Truth; see `README.md` for how to read their "§" references.
 
 ---
 
+## 2026-10-03 — Loop 008: rerouting evaluation
+
+- **Added:**
+  - `src/evaluate_rerouting.py`;
+  - `tests/test_evaluate_rerouting.py` (14 tests);
+  - `data/rerouting_eval/` (runs.csv, events.csv, summary_overall.csv,
+    summary_by_voyage.csv, summary_by_vessel.csv, summary_by_scenario.csv,
+    config.json, rel_change_vessel_scenario.png).
+- **Changed:** docs (Source of Truth §5.7, §11.5, §15, Phase 4 status;
+  `README.md`; loop-engineering records, including a stale
+  `evaluation.csv` statement in `PROJECT_STATE.md`).
+- **Not changed:** routing, rerouting controller, thresholds, weather
+  scenarios, `src/evaluate.py`, `data/processed/` (including
+  `evaluation.csv`), API/UI, dependencies.
+
+---
+
 ## 2026-10-03 — Loop 007: route cost / travel time consistency
 
 - **Changed:**

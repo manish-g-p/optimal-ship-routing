@@ -1,0 +1,390 @@
+run_id,step,decision,reason,triggers,remaining_hours,alternative_hours,gain_pct
+1,2,adopted,alternative 10.5% (379) cheaper,max wave 7.61 m >= 4.0 m; remaining cost +22.7% >= 5.0%,139.43811588298107,124.80901181484316,10.491467111055135
+2,4,retained,gain 2.0% (63) below threshold,max wave 5.12 m >= 4.0 m; remaining cost +9.9% >= 5.0%; periodic re-check (4 steps),119.4270826634517,117.00121904892494,2.0312508355938825
+2,5,unchanged,weather and route unchanged since last alternative search,max wave 5.12 m >= 4.0 m; remaining cost +10.1% >= 5.0%,117.09516597502964,,
+2,6,adopted,alternative 11.3% (379) cheaper,max wave 7.61 m >= 4.0 m; remaining cost +24.8% >= 5.0%,129.7145171741988,115.08541310606084,11.277923540733637
+3,0,unchanged,weather and route unchanged since last alternative search,max wave 4.03 m >= 4.0 m,151.77265136473886,,
+3,1,unchanged,weather and route unchanged since last alternative search,max wave 4.03 m >= 4.0 m,149.18103510490798,,
+3,4,adopted,alternative 15.1% (501) cheaper,periodic re-check (4 steps),128.01950054961048,108.6852007817346,15.102620838911495
+4,4,retained,gain 0.0% (1) below threshold,periodic re-check (4 steps),108.76835854392333,108.74527923169885,0.021218774038181502
+5,1,adopted,alternative 16.9% (728) cheaper,max wave 7.21 m >= 4.0 m; remaining cost +43.1% >= 5.0%,166.41119862487474,138.34740150704238,16.86412774484846
+5,2,cooldown,last change at step 1,max wave 6.35 m >= 4.0 m; remaining cost +32.3% >= 5.0%,179.51087620043987,,
+5,5,adopted,alternative 33.3% (1485) cheaper,max wave 6.35 m >= 4.0 m; remaining cost +34.1% >= 5.0%; periodic re-check (4 steps),172.20144351134218,114.91628651797966,33.266362827898924
+5,6,cooldown,last change at step 5,max wave 4.82 m >= 4.0 m; remaining cost +11.7% >= 5.0%,125.62119753161063,,
+5,7,cooldown,last change at step 5,max wave 7.17 m >= 4.0 m; remaining cost +35.4% >= 5.0%,148.6458201073654,,
+5,8,retained,gain 0.0% (0) below threshold,max wave 4.19 m >= 4.0 m,107.09833574490128,107.09833574490128,0.0
+5,9,adopted,alternative 9.8% (299) cheaper,max wave 4.82 m >= 4.0 m; remaining cost +12.5% >= 5.0%,117.66358679649596,106.12496599398007,9.80644999584487
+5,10,cooldown,last change at step 9,max wave 6.60 m >= 4.0 m; remaining cost +43.5% >= 5.0%,148.74360543723,,
+5,11,cooldown,last change at step 9,max wave 6.37 m >= 4.0 m; remaining cost +40.0% >= 5.0%,141.82857045525475,,
+5,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),96.38717791979344,96.38717791979344,0.0
+7,2,adopted,alternative 8.8% (303) cheaper,max wave 7.54 m >= 4.0 m; remaining cost +18.8% >= 5.0%,84.65074248801042,77.21034137532298,8.789528471934267
+8,4,retained,gain 0.6% (17) below threshold,max wave 5.05 m >= 4.0 m; remaining cost +5.8% >= 5.0%; periodic re-check (4 steps),72.08791502848361,71.66589326730855,0.5854265045788942
+8,5,unchanged,weather and route unchanged since last alternative search,max wave 5.05 m >= 4.0 m; remaining cost +5.9% >= 5.0%,70.62439455253005,,
+8,6,adopted,alternative 9.5% (303) cheaper,max wave 7.54 m >= 4.0 m; remaining cost +20.6% >= 5.0%,78.53669099715684,71.0962898844694,9.47378991681326
+9,0,unchanged,weather and route unchanged since last alternative search,max wave 4.81 m >= 4.0 m,91.51536379844102,,
+9,1,unchanged,weather and route unchanged since last alternative search,max wave 4.81 m >= 4.0 m,89.88463281173006,,
+9,4,adopted,alternative 11.8% (371) cheaper,periodic re-check (4 steps),77.2389604393926,68.12585933136435,11.798580737216238
+10,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),68.17053394597106,68.16100244856828,0.013981843548892207
+11,1,adopted,alternative 15.0% (608) cheaper,max wave 7.17 m >= 4.0 m; remaining cost +36.6% >= 5.0%,99.59641809850596,84.66606473713698,14.990853733918524
+11,2,cooldown,last change at step 1,max wave 6.72 m >= 4.0 m; remaining cost +33.4% >= 5.0%,110.75979153067631,,
+11,5,adopted,alternative 33.7% (1456) cheaper,max wave 6.72 m >= 4.0 m; remaining cost +35.4% >= 5.0%; periodic re-check (4 steps),106.1594964835797,70.41830561720205,33.66744573049661
+11,6,cooldown,last change at step 5,max wave 4.73 m >= 4.0 m; remaining cost +5.3% >= 5.0%,72.57179964656656,,
+11,7,cooldown,last change at step 5,max wave 7.17 m >= 4.0 m; remaining cost +32.9% >= 5.0%,89.29907299071397,,
+11,8,retained,gain 0.0% (0) below threshold,max wave 4.26 m >= 4.0 m,65.50935988511014,65.50935988511014,0.0
+11,9,adopted,alternative 3.9% (107) cheaper,max wave 4.73 m >= 4.0 m; remaining cost +5.7% >= 5.0%,67.51818036446055,64.90156944985347,3.8754168143790575
+11,10,cooldown,last change at step 9,max wave 7.26 m >= 4.0 m; remaining cost +35.5% >= 5.0%,85.89527381575684,,
+11,11,cooldown,last change at step 9,max wave 4.66 m >= 4.0 m,63.04926717414778,,
+11,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),58.84815942502051,58.84815942502051,0.0
+13,2,adopted,alternative 10.0% (354) cheaper,max wave 7.55 m >= 4.0 m; remaining cost +21.2% >= 5.0%,119.89147014740367,107.94289581407159,9.966158825679244
+14,4,retained,gain 0.7% (22) below threshold,max wave 5.05 m >= 4.0 m; remaining cost +7.4% >= 5.0%; periodic re-check (4 steps),101.53943203983705,100.80817176871528,0.7201736866470401
+14,5,unchanged,weather and route unchanged since last alternative search,max wave 5.05 m >= 4.0 m; remaining cost +7.5% >= 5.0%,99.50425449549635,,
+14,6,adopted,alternative 10.7% (354) cheaper,max wave 7.55 m >= 4.0 m; remaining cost +23.2% >= 5.0%,111.3931883709849,99.44461403765284,10.72648562095056
+15,0,unchanged,weather and route unchanged since last alternative search,max wave 4.03 m >= 4.0 m,129.66368642324457,,
+15,1,unchanged,weather and route unchanged since last alternative search,max wave 4.03 m >= 4.0 m,127.39815590964048,,
+15,4,adopted,alternative 14.3% (467) cheaper,periodic re-check (4 steps),110.331438416247,94.58407676933396,14.272778342201086
+16,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),94.66582236497291,94.65549802301412,0.01090609229483082
+17,1,adopted,alternative 16.0% (671) cheaper,max wave 7.19 m >= 4.0 m; remaining cost +39.8% >= 5.0%,141.5914032487328,118.95089870338043,15.990027661199118
+17,2,cooldown,last change at step 1,max wave 6.88 m >= 4.0 m; remaining cost +35.9% >= 5.0%,158.56026516474785,,
+17,5,adopted,alternative 34.7% (1566) cheaper,max wave 6.88 m >= 4.0 m; remaining cost +38.0% >= 5.0%; periodic re-check (4 steps),152.16498308946257,99.30820982791944,34.73648942639252
+17,6,cooldown,last change at step 5,max wave 4.71 m >= 4.0 m; remaining cost +7.0% >= 5.0%,103.97147174461149,,
+17,7,cooldown,last change at step 5,max wave 7.17 m >= 4.0 m; remaining cost +34.1% >= 5.0%,127.09539641880463,,
+17,8,retained,gain 0.0% (0) below threshold,max wave 4.26 m >= 4.0 m,92.48452848403458,92.48452848403458,0.0
+17,9,adopted,alternative 5.7% (164) cheaper,max wave 4.71 m >= 4.0 m; remaining cost +7.5% >= 5.0%,96.94658298227488,91.41725572614965,5.703478231033874
+17,10,cooldown,last change at step 9,max wave 7.08 m >= 4.0 m; remaining cost +40.5% >= 5.0%,125.33930361592222,,
+17,11,cooldown,last change at step 9,max wave 5.62 m >= 4.0 m; remaining cost +21.6% >= 5.0%,106.06254023032697,,
+17,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),82.98623115345646,82.98623115345646,0.0
+19,2,adopted,alternative 12.6% (470) cheaper,max wave 7.58 m >= 4.0 m; remaining cost +26.1% >= 5.0%,125.72587816395897,109.85544173451646,12.623046791326361
+20,4,retained,gain 2.7% (84) below threshold,max wave 5.10 m >= 4.0 m; remaining cost +11.9% >= 5.0%; periodic re-check (4 steps),106.65569334515843,103.81022725230015,2.6678989218604614
+20,5,unchanged,weather and route unchanged since last alternative search,max wave 5.10 m >= 4.0 m; remaining cost +12.2% >= 5.0%,104.6040991446657,,
+20,6,adopted,alternative 13.5% (470) cheaper,max wave 7.58 m >= 4.0 m; remaining cost +28.6% >= 5.0%,117.15842332300774,101.28798689356516,13.546133499669516
+21,4,adopted,alternative 17.2% (587) cheaper,periodic re-check (4 steps),115.09253640241587,95.29683086518776,17.19981690907682
+22,4,retained,gain 0.0% (1) below threshold,periodic re-check (4 steps),95.41537055505083,95.39192869901402,0.024568217783413407
+23,1,adopted,alternative 16.9% (737) cheaper,max wave 7.19 m >= 4.0 m; remaining cost +44.3% >= 5.0%,147.24576107122908,122.38415612236902,16.88442829728282
+23,2,cooldown,last change at step 1,max wave 6.29 m >= 4.0 m; remaining cost +34.1% >= 5.0%,160.97570755750982,,
+23,5,adopted,alternative 32.8% (1502) cheaper,max wave 6.29 m >= 4.0 m; remaining cost +36.0% >= 5.0%; periodic re-check (4 steps),154.52551223975146,103.84121794706033,32.799952291407244
+23,6,cooldown,last change at step 5,max wave 4.71 m >= 4.0 m; remaining cost +12.0% >= 5.0%,113.93385679054154,,
+23,7,cooldown,last change at step 5,max wave 7.19 m >= 4.0 m; remaining cost +34.7% >= 5.0%,133.73898329340662,,
+23,8,retained,gain 0.0% (0) below threshold,max wave 4.27 m >= 4.0 m,96.96891455286112,96.96891455286112,0.0
+23,9,adopted,alternative 12.2% (385) cheaper,max wave 4.71 m >= 4.0 m; remaining cost +12.9% >= 5.0%,106.86601546743331,93.86169398137464,12.168809166485337
+23,10,cooldown,last change at step 9,max wave 6.32 m >= 4.0 m; remaining cost +44.1% >= 5.0%,131.98968221490918,,
+23,11,cooldown,last change at step 9,max wave 6.67 m >= 4.0 m; remaining cost +43.2% >= 5.0%,128.20298136958587,,
+23,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),85.21737728950747,85.21737728950747,0.0
+25,2,adopted,alternative 10.8% (385) cheaper,max wave 7.54 m >= 4.0 m; remaining cost +21.9% >= 5.0%,101.1196703758158,90.1711522028748,10.82728823407983
+26,4,retained,gain 1.1% (33) below threshold,max wave 5.05 m >= 4.0 m; remaining cost +7.0% >= 5.0%; periodic re-check (4 steps),84.8155760982877,83.86894285565963,1.1161077789898841
+26,5,unchanged,weather and route unchanged since last alternative search,max wave 5.05 m >= 4.0 m; remaining cost +7.2% >= 5.0%,83.10255691568887,,
+26,6,adopted,alternative 11.7% (385) cheaper,max wave 7.54 m >= 4.0 m; remaining cost +24.0% >= 5.0%,93.91436676238501,82.96584858944402,11.657980083752369
+27,0,unchanged,weather and route unchanged since last alternative search,max wave 4.73 m >= 4.0 m,107.37034421645855,,
+27,1,unchanged,weather and route unchanged since last alternative search,max wave 4.73 m >= 4.0 m,105.46702544015766,,
+27,4,adopted,alternative 12.0% (379) cheaper,periodic re-check (4 steps),90.01275633801407,79.23606201583702,11.972407868178836
+28,4,retained,gain 0.0% (1) below threshold,periodic re-check (4 steps),79.30945617309452,79.28966006959828,0.024960584086004736
+29,1,adopted,alternative 16.0% (664) cheaper,max wave 7.17 m >= 4.0 m; remaining cost +38.8% >= 5.0%,117.7944836447612,98.92538055403121,16.018664462789705
+29,2,cooldown,last change at step 1,max wave 6.77 m >= 4.0 m; remaining cost +35.0% >= 5.0%,131.0303149833031,,
+29,5,adopted,alternative 34.4% (1519) cheaper,max wave 6.77 m >= 4.0 m; remaining cost +37.1% >= 5.0%; periodic re-check (4 steps),125.59663030743593,82.44155694656756,34.36005667925423
+29,6,cooldown,last change at step 5,max wave 4.68 m >= 4.0 m; remaining cost +5.8% >= 5.0%,85.35073461748019,,
+29,7,cooldown,last change at step 5,max wave 7.17 m >= 4.0 m; remaining cost +33.7% >= 5.0%,105.18171599082494,,
+29,8,retained,gain 0.0% (0) below threshold,max wave 4.26 m >= 4.0 m,76.7072848792228,76.7072848792228,0.0
+29,9,adopted,alternative 4.3% (121) cheaper,max wave 4.68 m >= 4.0 m; remaining cost +6.3% >= 5.0%,79.45832655906742,76.00877715907642,4.341331549975051
+29,10,cooldown,last change at step 9,max wave 7.26 m >= 4.0 m; remaining cost +37.3% >= 5.0%,101.91047699532156,,
+29,11,cooldown,last change at step 9,max wave 4.66 m >= 4.0 m,74.33394918448374,,
+29,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),68.77396801066178,68.77396801066178,0.0
+31,2,adopted,alternative 20.2% (447) cheaper,max wave 7.26 m >= 4.0 m; remaining cost +29.8% >= 5.0%,85.5307822589518,68.29174485818318,20.155360380752686
+32,4,adopted,alternative 5.8% (98) cheaper,max wave 4.79 m >= 4.0 m; remaining cost +9.3% >= 5.0%; periodic re-check (4 steps),65.42836676012509,61.66110524881185,5.757841281786622
+32,8,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),52.11734203318099,52.11734203318099,0.0
+33,4,adopted,alternative 6.1% (106) cheaper,periodic re-check (4 steps),66.73582825819148,62.655515556542774,6.114126112082623
+34,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),59.95133519005845,59.94929381493399,0.0034050536455741123
+35,1,adopted,alternative 24.8% (632) cheaper,max wave 7.36 m >= 4.0 m; remaining cost +43.4% >= 5.0%,98.38961071813313,74.02212374636645,24.766321153129407
+35,2,cooldown,last change at step 1,max wave 7.73 m >= 4.0 m; remaining cost +13.8% >= 5.0%,81.61258823227703,,
+35,4,retained,gain 0.0% (0) below threshold,max wave 4.57 m >= 4.0 m,67.0608461013441,67.0608461013441,0.0
+35,5,adopted,alternative 7.9% (152) cheaper,max wave 7.73 m >= 4.0 m; remaining cost +15.3% >= 5.0%,74.5747668802349,68.71688227704051,7.855049165090917
+35,7,cooldown,last change at step 5,max wave 7.13 m >= 4.0 m,65.3955126960932,,
+35,8,retained,gain 0.0% (0) below threshold,max wave 6.12 m >= 4.0 m,59.88471615366386,59.88471615366386,0.0
+35,10,retained,gain 1.4% (21) below threshold,max wave 7.13 m >= 4.0 m,56.39826107001215,55.59243615183518,1.4288116386720329
+35,11,retained,gain 0.0% (0) below threshold,max wave 6.12 m >= 4.0 m,50.5754013042589,50.5754013042589,0.0
+35,15,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),31.77549997733298,31.766178214929543,0.029336320152595394
+37,2,adopted,alternative 16.3% (338) cheaper,max wave 7.25 m >= 4.0 m; remaining cost +22.7% >= 5.0%,50.82062235393259,42.53252661198934,16.308528620964257
+38,4,adopted,alternative 3.5% (57) cheaper,max wave 4.76 m >= 4.0 m; remaining cost +6.0% >= 5.0%; periodic re-check (4 steps),39.858141295311285,38.470187450602744,3.482234242748831
+38,8,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),32.36340477868485,32.35484286681401,0.026455534976601518
+39,4,adopted,alternative 5.7% (97) cheaper,periodic re-check (4 steps),41.623003407467564,39.244072083892,5.715424474027183
+40,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),37.6372958141185,37.637292081608116,9.917052495231908e-06
+41,1,adopted,alternative 20.5% (480) cheaper,max wave 7.36 m >= 4.0 m; remaining cost +33.1% >= 5.0%,57.415813854774875,45.62467425696792,20.536397215636374
+41,2,cooldown,last change at step 1,max wave 7.73 m >= 4.0 m; remaining cost +9.0% >= 5.0%,48.18687668688159,,
+41,4,retained,gain 0.0% (0) below threshold,max wave 4.57 m >= 4.0 m,41.29840732942608,41.29840732942608,0.0
+41,5,adopted,alternative 5.0% (88) cheaper,max wave 7.73 m >= 4.0 m; remaining cost +10.0% >= 5.0%,43.83426235118588,41.66443961828712,4.950061017372308
+41,7,cooldown,last change at step 5,max wave 7.13 m >= 4.0 m,39.251575324356246,,
+41,8,retained,gain 0.0% (0) below threshold,max wave 6.12 m >= 4.0 m,36.16709668659792,36.16709668659792,0.0
+41,10,retained,gain 1.4% (20) below threshold,max wave 7.13 m >= 4.0 m,33.63498272391578,33.1554574967708,1.4256740700033783
+41,11,retained,gain 0.0% (0) below threshold,max wave 6.12 m >= 4.0 m,30.46172241610739,30.46172241610739,0.0
+41,15,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),19.90091964581951,19.89698607091968,0.019765794595591912
+43,2,adopted,alternative 18.7% (404) cheaper,max wave 7.25 m >= 4.0 m; remaining cost +26.4% >= 5.0%,72.77504559974112,59.14960776050727,18.722678532107047
+44,4,adopted,alternative 5.1% (86) cheaper,max wave 4.76 m >= 4.0 m; remaining cost +7.9% >= 5.0%; periodic re-check (4 steps),56.39044667748094,53.49372691936812,5.136898054169157
+44,8,retained,gain 0.0% (1) below threshold,periodic re-check (4 steps),45.09904579936944,45.079589005892714,0.04314236173262623
+45,4,adopted,alternative 5.6% (97) cheaper,periodic re-check (4 steps),57.873213432349665,54.60484779464653,5.647458372989183
+46,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),52.30303085360312,52.3030232724643,1.4494645330218363e-05
+47,1,adopted,alternative 23.3% (576) cheaper,max wave 7.36 m >= 4.0 m; remaining cost +38.9% >= 5.0%,83.2663039541656,63.84143348818239,23.328608985305436
+47,2,cooldown,last change at step 1,max wave 7.73 m >= 4.0 m; remaining cost +11.4% >= 5.0%,68.89975603371565,,
+47,4,retained,gain 0.0% (0) below threshold,max wave 4.57 m >= 4.0 m,57.85683819378533,57.85683819378533,0.0
+47,5,adopted,alternative 6.0% (113) cheaper,max wave 7.73 m >= 4.0 m; remaining cost +12.6% >= 5.0%,62.87595091066158,59.0771387768337,6.041756949688908
+47,7,cooldown,last change at step 5,max wave 7.13 m >= 4.0 m,55.87459401427093,,
+47,8,retained,gain 0.0% (0) below threshold,max wave 6.12 m >= 4.0 m,51.39912827055232,51.39912827055232,0.0
+47,10,retained,gain 1.0% (14) below threshold,max wave 7.13 m >= 4.0 m,48.00057532091172,47.540683036308025,0.9580974426432348
+47,11,retained,gain 0.0% (0) below threshold,max wave 6.12 m >= 4.0 m,43.36595511392145,43.36595511392145,0.0
+47,15,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),27.641432262408518,27.63622477400157,0.01883943045176761
+49,2,adopted,alternative 21.6% (490) cheaper,max wave 7.25 m >= 4.0 m; remaining cost +32.2% >= 5.0%,76.48876085409742,59.93585111415555,21.640969934807295
+50,4,adopted,alternative 7.9% (137) cheaper,max wave 4.76 m >= 4.0 m; remaining cost +11.8% >= 5.0%; periodic re-check (4 steps),58.72739931928083,54.100671206645096,7.878312621135819
+50,8,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),45.68727899535503,45.68727899535503,0.0
+51,4,adopted,alternative 6.5% (114) cheaper,periodic re-check (4 steps),58.7375192439982,54.89084491794187,6.548922010269253
+52,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),52.627432655478735,52.627432655478735,0.0
+53,1,adopted,alternative 25.5% (663) cheaper,max wave 7.36 m >= 4.0 m; remaining cost +45.9% >= 5.0%,87.9174760690679,65.5330581859671,25.460714847541364
+53,2,cooldown,last change at step 1,max wave 7.57 m >= 4.0 m; remaining cost +19.9% >= 5.0%,76.14596985898379,,
+53,4,retained,gain 0.0% (0) below threshold,max wave 4.01 m >= 4.0 m,59.42504812518053,59.42504812518053,0.0
+53,5,adopted,alternative 11.6% (240) cheaper,max wave 7.57 m >= 4.0 m; remaining cost +22.0% >= 5.0%,69.96128859701743,61.8775239571494,11.554625139098208
+53,7,cooldown,last change at step 5,max wave 7.13 m >= 4.0 m; remaining cost +5.7% >= 5.0%,60.126269702154985,,
+53,8,retained,gain 0.0% (0) below threshold,max wave 6.12 m >= 4.0 m,54.08612380528597,54.08612380528597,0.0
+53,10,retained,gain 2.0% (30) below threshold,max wave 7.13 m >= 4.0 m; remaining cost +6.4% >= 5.0%,52.11968781291802,51.09265130778845,1.9705346448276602
+53,11,retained,gain 0.0% (0) below threshold,max wave 6.12 m >= 4.0 m,45.86046475438521,45.86046475438521,0.0
+53,15,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),27.87798560897938,27.876591669279513,0.005000144986867827
+55,2,adopted,alternative 17.9% (380) cheaper,max wave 7.25 m >= 4.0 m; remaining cost +24.7% >= 5.0%,60.23230664090424,49.44653741008375,17.906950326713517
+56,4,adopted,alternative 4.2% (69) cheaper,max wave 4.76 m >= 4.0 m; remaining cost +6.6% >= 5.0%; periodic re-check (4 steps),46.761467190747624,44.807854223972285,4.177826497201719
+56,8,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),37.60430941520762,37.60430941520762,0.0
+57,4,adopted,alternative 5.4% (92) cheaper,periodic re-check (4 steps),48.42572653208263,45.81334457932749,5.39461591975167
+58,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),43.901596016955736,43.901596016955736,0.0
+59,1,adopted,alternative 22.0% (529) cheaper,max wave 7.36 m >= 4.0 m; remaining cost +35.6% >= 5.0%,68.21139855933906,53.182069422526894,22.03345695036252
+59,2,cooldown,last change at step 1,max wave 7.73 m >= 4.0 m; remaining cost +9.5% >= 5.0%,56.41389787878728,,
+59,4,retained,gain 0.0% (0) below threshold,max wave 4.57 m >= 4.0 m,48.157096152125014,48.157096152125014,0.0
+59,5,adopted,alternative 5.1% (93) cheaper,max wave 7.73 m >= 4.0 m; remaining cost +10.6% >= 5.0%,51.364421786045774,48.722376106367285,5.143727093208047
+59,7,cooldown,last change at step 5,max wave 7.13 m >= 4.0 m,45.94622568513453,,
+59,8,retained,gain 0.0% (0) below threshold,max wave 6.12 m >= 4.0 m,42.30703649282975,42.30703649282975,0.0
+59,10,retained,gain 1.6% (22) below threshold,max wave 7.13 m >= 4.0 m,39.57755712616444,38.9584387178372,1.5643168838178516
+59,11,retained,gain 0.0% (0) below threshold,max wave 6.12 m >= 4.0 m,35.6535311117889,35.6535311117889,0.0
+59,15,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),23.169050428091865,23.16608260766383,0.012809417620469169
+61,2,adopted,alternative 18.7% (668) cheaper,max wave 7.75 m >= 4.0 m; remaining cost +26.2% >= 5.0%,138.03869647419876,112.29239894235555,18.651507287056667
+62,4,adopted,alternative 6.0% (173) cheaper,max wave 5.25 m >= 4.0 m; remaining cost +8.2% >= 5.0%; periodic re-check (4 steps),111.6712022135298,105.0129454300815,5.962375842177152
+62,8,retained,gain 0.0% (1) below threshold,periodic re-check (4 steps),93.688418562824,93.64395468702305,0.04745930872034161
+63,4,adopted,alternative 5.4% (157) cheaper,periodic re-check (4 steps),110.92913997931934,104.88482722489809,5.448805206231751
+64,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),103.3026855576466,103.3026855576466,0.0
+65,1,adopted,alternative 26.7% (1138) cheaper,max wave 7.80 m >= 4.0 m; remaining cost +46.7% >= 5.0%,164.11548660619488,120.23394521928282,26.73820874212102
+65,2,cooldown,last change at step 1,max wave 6.99 m >= 4.0 m; remaining cost +19.4% >= 5.0%,140.54524713210526,,
+65,5,adopted,alternative 15.9% (551) cheaper,max wave 6.99 m >= 4.0 m; remaining cost +20.7% >= 5.0%; periodic re-check (4 steps),133.20278015937097,111.96538770766277,15.943655550055816
+65,6,cooldown,last change at step 5,max wave 7.51 m >= 4.0 m; remaining cost +47.9% >= 5.0%,161.62340020833574,,
+65,7,cooldown,last change at step 5,max wave 5.89 m >= 4.0 m; remaining cost +35.1% >= 5.0%,144.7034341603008,,
+65,9,adopted,alternative 37.6% (1495) cheaper,max wave 7.51 m >= 4.0 m; remaining cost +51.8% >= 5.0%; periodic re-check (4 steps),153.34879011445568,95.70537898955244,37.58973975724206
+65,10,cooldown,last change at step 9,max wave 5.97 m >= 4.0 m; remaining cost +21.3% >= 5.0%,112.25879998890257,,
+65,11,cooldown,last change at step 9,max wave 7.60 m >= 4.0 m; remaining cost +47.7% >= 5.0%,132.35665383675794,,
+65,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),84.84204971854808,84.84204971854808,0.0
+67,2,adopted,alternative 14.7% (484) cheaper,max wave 7.75 m >= 4.0 m; remaining cost +19.5% >= 5.0%,81.00953322349488,69.13887276861473,14.653411743690118
+68,4,adopted,alternative 3.6% (99) cheaper,max wave 5.25 m >= 4.0 m; remaining cost +5.1% >= 5.0%; periodic re-check (4 steps),67.5566408424255,65.11797288714722,3.609812336534652
+68,8,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),57.93768261491823,57.93768261491823,0.0
+69,0,unchanged,weather and route unchanged since last alternative search,max wave 4.52 m >= 4.0 m,77.26915543805053,,
+69,1,unchanged,weather and route unchanged since last alternative search,max wave 4.52 m >= 4.0 m,75.47195151613866,,
+69,4,adopted,alternative 4.5% (127) cheaper,periodic re-check (4 steps),68.4301743442305,65.31775342848057,4.5483165074126815
+70,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),64.34225000584,64.34225000584,0.0
+71,1,adopted,alternative 23.3% (916) cheaper,max wave 7.80 m >= 4.0 m; remaining cost +39.0% >= 5.0%,96.62782118355474,74.15237246447684,23.259811143193858
+71,2,cooldown,last change at step 1,max wave 7.61 m >= 4.0 m; remaining cost +15.8% >= 5.0%,83.99945543414756,,
+71,5,adopted,alternative 13.0% (424) cheaper,max wave 7.61 m >= 4.0 m; remaining cost +16.8% >= 5.0%; periodic re-check (4 steps),79.746333924856,69.34757409155331,13.039796717302776
+71,6,cooldown,last change at step 5,max wave 6.92 m >= 4.0 m; remaining cost +32.6% >= 5.0%,89.90450554302825,,
+71,7,cooldown,last change at step 5,max wave 6.80 m >= 4.0 m; remaining cost +32.1% >= 5.0%,87.55748614415563,,
+71,9,adopted,alternative 28.1% (980) cheaper,max wave 6.92 m >= 4.0 m; remaining cost +34.9% >= 5.0%; periodic re-check (4 steps),85.59321177214008,61.54655874419609,28.09411229007181
+71,10,cooldown,last change at step 9,max wave 5.97 m >= 4.0 m; remaining cost +11.4% >= 5.0%,66.91651949128183,,
+71,11,cooldown,last change at step 9,max wave 7.60 m >= 4.0 m; remaining cost +32.5% >= 5.0%,77.5195847716275,,
+71,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),54.92842557086367,54.92842557086367,0.0
+73,2,adopted,alternative 17.1% (589) cheaper,max wave 7.75 m >= 4.0 m; remaining cost +23.6% >= 5.0%,116.56387830196648,96.6892505374272,17.05041737977587
+74,4,adopted,alternative 4.7% (133) cheaper,max wave 5.25 m >= 4.0 m; remaining cost +6.7% >= 5.0%; periodic re-check (4 steps),95.35683778465517,90.88254956057604,4.6921524748790775
+74,8,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),81.00480084016928,80.99658827728199,0.010138365630337574
+75,0,unchanged,weather and route unchanged since last alternative search,max wave 4.03 m >= 4.0 m,108.15129584556897,,
+75,1,unchanged,weather and route unchanged since last alternative search,max wave 4.03 m >= 4.0 m,105.41762302085888,,
+75,4,adopted,alternative 5.7% (164) cheaper,periodic re-check (4 steps),96.47968951967432,90.95771446905576,5.723458562221549
+76,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),89.41999284872703,89.41999284872703,0.0
+77,1,adopted,alternative 25.2% (1035) cheaper,max wave 7.80 m >= 4.0 m; remaining cost +43.6% >= 5.0%,138.45677725486834,103.51742225630298,25.23484634793264
+77,2,cooldown,last change at step 1,max wave 7.43 m >= 4.0 m; remaining cost +19.3% >= 5.0%,121.05483381129416,,
+77,5,adopted,alternative 15.8% (540) cheaper,max wave 7.43 m >= 4.0 m; remaining cost +20.5% >= 5.0%; periodic re-check (4 steps),115.15426829548117,96.9333823385759,15.823022651797167
+77,6,cooldown,last change at step 5,max wave 7.07 m >= 4.0 m; remaining cost +40.2% >= 5.0%,132.8547574365429,,
+77,7,cooldown,last change at step 5,max wave 6.62 m >= 4.0 m; remaining cost +37.5% >= 5.0%,127.6585411447146,,
+77,9,adopted,alternative 31.9% (1201) cheaper,max wave 7.07 m >= 4.0 m; remaining cost +42.8% >= 5.0%; periodic re-check (4 steps),127.02992107252471,86.49690007219428,31.90824701621996
+77,10,cooldown,last change at step 9,max wave 5.97 m >= 4.0 m; remaining cost +15.1% >= 5.0%,96.4767786331133,,
+77,11,cooldown,last change at step 9,max wave 7.60 m >= 4.0 m; remaining cost +40.1% >= 5.0%,114.65100678937372,,
+77,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),77.30109305556245,77.30109305556245,0.0
+79,2,adopted,alternative 19.8% (721) cheaper,max wave 7.75 m >= 4.0 m; remaining cost +27.8% >= 5.0%,122.95215899254595,98.61262158280442,19.795941453307154
+80,4,adopted,alternative 8.0% (238) cheaper,max wave 5.25 m >= 4.0 m; remaining cost +10.4% >= 5.0%; periodic re-check (4 steps),100.70938429931563,92.66416872565998,7.9885460820062955
+80,8,retained,gain 0.3% (8) below threshold,periodic re-check (4 steps),82.7920019629242,82.52688832402079,0.32021648543073317
+81,4,adopted,alternative 6.1% (177) cheaper,periodic re-check (4 steps),98.49452394175202,92.5159847970107,6.069920342248602
+82,4,retained,gain 0.0% (1) below threshold,periodic re-check (4 steps),91.25919200602628,91.23113028877492,0.030749469324152765
+83,1,adopted,alternative 27.8% (1208) cheaper,max wave 7.80 m >= 4.0 m; remaining cost +48.6% >= 5.0%,146.59303214429036,105.83980615987448,27.800247657271175
+83,2,cooldown,last change at step 1,max wave 7.05 m >= 4.0 m; remaining cost +25.8% >= 5.0%,130.33273665074984,,
+83,5,adopted,alternative 20.2% (742) cheaper,max wave 7.05 m >= 4.0 m; remaining cost +27.5% >= 5.0%; periodic re-check (4 steps),124.00023934059655,98.9721313879058,20.183919068047132
+83,6,cooldown,last change at step 5,max wave 7.51 m >= 4.0 m; remaining cost +49.5% >= 5.0%,144.647516536188,,
+83,7,cooldown,last change at step 5,max wave 5.89 m >= 4.0 m; remaining cost +37.7% >= 5.0%,130.3822622376276,,
+83,9,adopted,alternative 36.8% (1512) cheaper,max wave 7.51 m >= 4.0 m; remaining cost +52.7% >= 5.0%; periodic re-check (4 steps),138.6268120416925,87.6064483590677,36.80410948733368
+83,10,cooldown,last change at step 9,max wave 5.97 m >= 4.0 m; remaining cost +25.9% >= 5.0%,107.4138605138184,,
+83,11,cooldown,last change at step 9,max wave 7.60 m >= 4.0 m; remaining cost +48.3% >= 5.0%,122.81942974108723,,
+83,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),78.15602668854608,78.15602668854608,0.0
+85,2,adopted,alternative 15.8% (534) cheaper,max wave 7.75 m >= 4.0 m; remaining cost +21.2% >= 5.0%,95.87372697775493,80.70402835361139,15.822581537550192
+86,4,adopted,alternative 4.1% (115) cheaper,max wave 5.25 m >= 4.0 m; remaining cost +5.6% >= 5.0%; periodic re-check (4 steps),79.20676077882541,75.9457617472735,4.117071572536381
+86,8,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),67.66784214709271,67.66784214709271,0.0
+87,0,unchanged,weather and route unchanged since last alternative search,max wave 4.03 m >= 4.0 m,90.22470011164783,,
+87,1,unchanged,weather and route unchanged since last alternative search,max wave 4.03 m >= 4.0 m,88.52046859417517,,
+87,4,adopted,alternative 5.5% (157) cheaper,periodic re-check (4 steps),81.31124759663639,76.83622765853832,5.503568165990337
+88,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),75.03255595090428,75.03255595090428,0.0
+89,1,adopted,alternative 24.1% (967) cheaper,max wave 7.80 m >= 4.0 m; remaining cost +40.6% >= 5.0%,114.16681951631989,86.69599265810137,24.062005909073797
+89,2,cooldown,last change at step 1,max wave 7.61 m >= 4.0 m; remaining cost +17.9% >= 5.0%,100.01290000353464,,
+89,5,adopted,alternative 14.6% (489) cheaper,max wave 7.61 m >= 4.0 m; remaining cost +19.0% >= 5.0%; periodic re-check (4 steps),94.86344928914791,80.9719956346504,14.643631196832994
+89,6,cooldown,last change at step 5,max wave 7.25 m >= 4.0 m; remaining cost +39.4% >= 5.0%,110.33981196496222,,
+89,7,cooldown,last change at step 5,max wave 6.37 m >= 4.0 m; remaining cost +30.9% >= 5.0%,101.4914428913957,,
+89,9,adopted,alternative 31.6% (1172) cheaper,max wave 7.25 m >= 4.0 m; remaining cost +42.0% >= 5.0%; periodic re-check (4 steps),105.46494168305875,72.15169586898324,31.587032887372047
+89,10,cooldown,last change at step 9,max wave 5.97 m >= 4.0 m; remaining cost +13.0% >= 5.0%,79.63948530860152,,
+89,11,cooldown,last change at step 9,max wave 7.60 m >= 4.0 m; remaining cost +35.4% >= 5.0%,93.00463914401104,,
+89,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),64.3991289058222,64.3991289058222,0.0
+91,2,adopted,alternative 26.1% (674) cheaper,max wave 7.30 m >= 4.0 m; remaining cost +56.8% >= 5.0%,99.62627712877386,73.63691500765508,26.08685466337935
+92,2,retained,gain 0.0% (0) below threshold,remaining cost +5.2% >= 5.0%,66.82975269717997,66.82975269717997,0.0
+92,3,unchanged,weather and route unchanged since last alternative search,remaining cost +5.4% >= 5.0%,64.06248429592115,,
+92,4,adopted,alternative 16.9% (347) cheaper,max wave 4.80 m >= 4.0 m; remaining cost +35.8% >= 5.0%,79.47551946968103,66.07597518313888,16.859964396525797
+92,6,cooldown,last change at step 4,remaining cost +10.2% >= 5.0%,65.88446043829674,,
+92,7,retained,gain 2.0% (32) below threshold,remaining cost +10.7% >= 5.0%,62.938490448654576,61.70887621757573,1.9536760769341477
+92,8,unchanged,weather and route unchanged since last alternative search,remaining cost +11.1% >= 5.0%,60.691155150934556,,
+92,9,unchanged,weather and route unchanged since last alternative search,remaining cost +11.6% >= 5.0%,58.43682693092512,,
+92,10,unchanged,weather and route unchanged since last alternative search,remaining cost +12.1% >= 5.0%,56.12858107633785,,
+92,11,unchanged,weather and route unchanged since last alternative search,remaining cost +12.5% >= 5.0%,53.70380222533982,,
+92,12,unchanged,weather and route unchanged since last alternative search,remaining cost +12.7% >= 5.0%,51.01908877442089,,
+92,13,unchanged,weather and route unchanged since last alternative search,remaining cost +12.2% >= 5.0%,47.85196494848879,,
+92,14,unchanged,weather and route unchanged since last alternative search,remaining cost +10.3% >= 5.0%,43.978238758154944,,
+92,15,unchanged,weather and route unchanged since last alternative search,remaining cost +7.4% >= 5.0%,39.61906420072139,,
+93,4,adopted,alternative 13.8% (268) cheaper,periodic re-check (4 steps),74.7324783908957,64.3829748119647,13.848735920140202
+94,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),58.73363314572076,58.73363314572076,0.0
+95,1,adopted,alternative 32.7% (1068) cheaper,max wave 7.28 m >= 4.0 m; remaining cost +89.6% >= 5.0%,126.10294645708134,84.89328295804142,32.67938193106809
+95,3,cooldown,last change at step 1,max wave 4.79 m >= 4.0 m; remaining cost +42.8% >= 5.0%,112.15880690952011,,
+95,5,adopted,alternative 4.1% (75) cheaper,periodic re-check (4 steps),70.37757794375747,67.4850113855497,4.110068352337136
+95,6,cooldown,last change at step 5,max wave 6.36 m >= 4.0 m; remaining cost +71.3% >= 5.0%,111.62826110454817,,
+95,7,cooldown,last change at step 5,remaining cost +12.3% >= 5.0%,70.56910871374376,,
+95,9,adopted,alternative 10.2% (229) cheaper,max wave 6.36 m >= 4.0 m; remaining cost +49.0% >= 5.0%; periodic re-check (4 steps),86.53984352566339,77.7012646948532,10.213305768445387
+95,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),60.44520927947276,60.44520927947276,0.0
+97,2,adopted,alternative 23.7% (573) cheaper,max wave 7.30 m >= 4.0 m; remaining cost +49.4% >= 5.0%,59.39104036607419,45.32740447638202,23.679726441912464
+98,4,adopted,alternative 5.8% (101) cheaper,max wave 4.80 m >= 4.0 m; remaining cost +18.0% >= 5.0%; periodic re-check (4 steps),43.163853920061854,40.675590536418824,5.7646923470995395
+98,6,cooldown,last change at step 4,max wave 4.54 m >= 4.0 m; remaining cost +9.4% >= 5.0%,40.20096995245356,,
+98,7,adopted,alternative 3.6% (56) cheaper,max wave 4.54 m >= 4.0 m; remaining cost +9.8% >= 5.0%,38.62702796897609,37.25240814880934,3.5586994196674966
+99,4,adopted,alternative 11.8% (219) cheaper,periodic re-check (4 steps),45.64147266087596,40.26393989978415,11.782119304185946
+100,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),36.64763810711951,36.64763810711951,0.0
+101,1,adopted,alternative 30.7% (927) cheaper,max wave 7.28 m >= 4.0 m; remaining cost +78.3% >= 5.0%,74.12614809183967,51.36505327866787,30.70589177920267
+101,3,cooldown,last change at step 1,max wave 5.46 m >= 4.0 m; remaining cost +38.1% >= 5.0%,65.44254532556272,,
+101,5,retained,gain 2.5% (43) below threshold,periodic re-check (4 steps),42.09302209432521,41.044557250022635,2.4908281518801205
+101,6,adopted,alternative 20.4% (480) cheaper,max wave 5.46 m >= 4.0 m; remaining cost +39.8% >= 5.0%,57.781367640483865,45.99952549067919,20.39038297451072
+101,10,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),35.579123193274725,35.579016862669164,0.00029885673399361845
+101,14,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),28.18210777643333,28.18210777643333,0.0
+103,2,adopted,alternative 25.1% (631) cheaper,max wave 7.30 m >= 4.0 m; remaining cost +53.2% >= 5.0%,84.75518286024777,63.46733254644693,25.116871435345995
+104,4,adopted,alternative 10.8% (205) cheaper,max wave 4.80 m >= 4.0 m; remaining cost +25.4% >= 5.0%; periodic re-check (4 steps),63.882615212812595,56.96147035624916,10.83416017567061
+104,6,cooldown,last change at step 4,remaining cost +8.5% >= 5.0%,55.90840507756961,,
+104,7,retained,gain 1.7% (27) below threshold,remaining cost +8.9% >= 5.0%,53.42220492108687,52.51294720343321,1.7020220692814683
+104,8,unchanged,weather and route unchanged since last alternative search,remaining cost +9.3% >= 5.0%,51.46081286455545,,
+104,9,unchanged,weather and route unchanged since last alternative search,remaining cost +9.7% >= 5.0%,49.49336217674942,,
+104,10,unchanged,weather and route unchanged since last alternative search,remaining cost +10.1% >= 5.0%,47.489152033017724,,
+104,11,unchanged,weather and route unchanged since last alternative search,remaining cost +10.4% >= 5.0%,45.39330933006744,,
+104,12,unchanged,weather and route unchanged since last alternative search,remaining cost +10.5% >= 5.0%,43.08688309988371,,
+104,13,unchanged,weather and route unchanged since last alternative search,remaining cost +9.9% >= 5.0%,40.35826048814625,,
+104,14,unchanged,weather and route unchanged since last alternative search,remaining cost +8.0% >= 5.0%,37.08360097327123,,
+104,15,unchanged,weather and route unchanged since last alternative search,remaining cost +5.6% >= 5.0%,33.63092708853585,,
+105,4,adopted,alternative 11.7% (221) cheaper,periodic re-check (4 steps),63.43052951648327,55.98466801356692,11.738608458221117
+106,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),51.023075300724706,51.023075300724706,0.0
+107,1,adopted,alternative 31.8% (1005) cheaper,max wave 7.28 m >= 4.0 m; remaining cost +84.3% >= 5.0%,106.66187771543704,72.7530543316682,31.790949222021126
+107,3,cooldown,last change at step 1,max wave 4.98 m >= 4.0 m; remaining cost +37.5% >= 5.0%,92.48857306535264,,
+107,5,adopted,alternative 3.5% (63) cheaper,periodic re-check (4 steps),60.06674999636887,57.95303799903197,3.518938510015405
+107,6,cooldown,last change at step 5,max wave 6.36 m >= 4.0 m; remaining cost +68.0% >= 5.0%,93.966151772695,,
+107,7,cooldown,last change at step 5,remaining cost +9.4% >= 5.0%,58.979597077808236,,
+107,9,adopted,alternative 11.1% (241) cheaper,max wave 6.36 m >= 4.0 m; remaining cost +46.8% >= 5.0%; periodic re-check (4 steps),73.12463009460596,64.98405619840159,11.132465060913677
+107,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),49.19427781496182,49.19427781496182,0.0
+109,2,adopted,alternative 26.8% (707) cheaper,max wave 7.30 m >= 4.0 m; remaining cost +59.0% >= 5.0%,89.1701169362912,65.31099365299315,26.756859924658983
+110,2,retained,gain 0.0% (0) below threshold,remaining cost +5.9% >= 5.0%,59.348479352401874,59.348479352401874,0.0
+110,3,unchanged,weather and route unchanged since last alternative search,remaining cost +6.1% >= 5.0%,56.93536056188724,,
+110,4,adopted,alternative 19.9% (432) cheaper,max wave 4.80 m >= 4.0 m; remaining cost +41.6% >= 5.0%,73.15679785731007,58.592739484088426,19.908004177039523
+110,6,cooldown,last change at step 4,remaining cost +13.1% >= 5.0%,60.06856206772797,,
+110,7,adopted,alternative 3.1% (52) cheaper,remaining cost +13.8% >= 5.0%,57.49161591907085,55.72334472076749,3.0757027264505807
+111,4,adopted,alternative 18.3% (376) cheaper,periodic re-check (4 steps),69.55532354763933,56.85529769753316,18.25888401109624
+112,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),51.787696565898386,51.787696565898386,0.0
+113,1,adopted,alternative 33.0% (1109) cheaper,max wave 7.28 m >= 4.0 m; remaining cost +93.6% >= 5.0%,113.52017101933737,76.09203413629284,32.970472601445344
+113,3,cooldown,last change at step 1,max wave 4.79 m >= 4.0 m; remaining cost +49.5% >= 5.0%,105.41656643238656,,
+113,5,adopted,alternative 4.0% (75) cheaper,periodic re-check (4 steps),62.920572385844366,60.405469198980484,3.9972668580327815
+113,6,cooldown,last change at step 5,max wave 6.36 m >= 4.0 m; remaining cost +72.2% >= 5.0%,100.46359480851035,,
+113,7,cooldown,last change at step 5,remaining cost +16.5% >= 5.0%,65.56694856344943,,
+113,9,adopted,alternative 8.3% (192) cheaper,max wave 6.36 m >= 4.0 m; remaining cost +49.7% >= 5.0%; periodic re-check (4 steps),78.01153034400255,71.53044658666,8.307853632358329
+113,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),56.103661776059305,56.103661776059305,0.0
+115,2,adopted,alternative 24.3% (597) cheaper,max wave 7.30 m >= 4.0 m; remaining cost +50.9% >= 5.0%,69.93086762221857,52.96595245075153,24.259551966543764
+116,4,adopted,alternative 8.0% (146) cheaper,max wave 4.80 m >= 4.0 m; remaining cost +21.2% >= 5.0%; periodic re-check (4 steps),51.73158800626729,47.58914144530468,8.007576648257439
+116,6,cooldown,last change at step 4,max wave 4.37 m >= 4.0 m; remaining cost +9.9% >= 5.0%,47.279428066788284,,
+116,7,adopted,alternative 3.6% (58) cheaper,max wave 4.37 m >= 4.0 m; remaining cost +10.3% >= 5.0%,45.38655454660955,43.748657452841876,3.608771606766592
+117,4,adopted,alternative 12.8% (242) cheaper,periodic re-check (4 steps),53.78709416511217,46.91689793671446,12.7729455086531
+118,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),42.734792020029325,42.734792020029325,0.0
+119,1,adopted,alternative 31.3% (965) cheaper,max wave 7.28 m >= 4.0 m; remaining cost +80.9% >= 5.0%,87.66710785658363,60.255826149740116,31.267464362673138
+119,3,cooldown,last change at step 1,max wave 5.08 m >= 4.0 m; remaining cost +33.8% >= 5.0%,74.45638465479345,,
+119,5,adopted,alternative 3.5% (62) cheaper,periodic re-check (4 steps),49.79076873323208,48.030115227399314,3.536104283237639
+119,6,cooldown,last change at step 5,max wave 6.36 m >= 4.0 m; remaining cost +66.2% >= 5.0%,77.00562829306787,,
+119,7,cooldown,last change at step 5,remaining cost +8.3% >= 5.0%,48.353781661192706,,
+119,9,adopted,alternative 12.1% (258) cheaper,max wave 6.36 m >= 4.0 m; remaining cost +46.1% >= 5.0%; periodic re-check (4 steps),60.26881509170993,52.94887775860033,12.145480746503793
+119,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),39.86636004745523,39.86636004745523,0.0
+121,2,adopted,alternative 28.4% (654) cheaper,max wave 7.65 m >= 4.0 m; remaining cost +46.2% >= 5.0%,88.91107234863391,63.691483473109024,28.36495861464253
+122,4,adopted,alternative 10.3% (171) cheaper,max wave 5.15 m >= 4.0 m; remaining cost +14.6% >= 5.0%; periodic re-check (4 steps),63.73364406589554,57.14325638207189,10.340516034215321
+122,8,retained,gain 0.4% (5) below threshold,periodic re-check (4 steps),46.269456445008515,46.061708146677425,0.4489966260528652
+123,4,adopted,alternative 4.5% (75) cheaper,periodic re-check (4 steps),64.71715319506062,61.81590019818268,4.48297376142832
+124,4,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),55.64634933084678,55.627313302270856,0.03420894417125042
+125,1,adopted,alternative 32.5% (936) cheaper,max wave 7.63 m >= 4.0 m; remaining cost +74.1% >= 5.0%,111.24671363816857,75.14066752749349,32.45583166448447
+125,2,cooldown,last change at step 1,max wave 6.12 m >= 4.0 m; remaining cost +66.3% >= 5.0%,120.57372297461315,,
+125,5,adopted,alternative 38.7% (1086) cheaper,max wave 6.12 m >= 4.0 m; remaining cost +73.1% >= 5.0%; periodic re-check (4 steps),108.28555118539319,66.40877725994892,38.67254076561702
+125,6,cooldown,last change at step 5,max wave 7.57 m >= 4.0 m; remaining cost +77.9% >= 5.0%,111.32181935701054,,
+125,7,cooldown,last change at step 5,max wave 6.29 m >= 4.0 m; remaining cost +48.3% >= 5.0%,86.90841000508853,,
+125,8,retained,gain 0.0% (0) below threshold,max wave 4.55 m >= 4.0 m,54.734980358566396,54.734980358566396,0.0
+125,9,adopted,alternative 46.1% (1217) cheaper,max wave 7.57 m >= 4.0 m; remaining cost +99.4% >= 5.0%,101.8055129130458,54.866592864851015,46.10646192440118
+125,10,cooldown,last change at step 9,max wave 6.51 m >= 4.0 m; remaining cost +77.1% >= 5.0%,92.27589821770464,,
+125,11,cooldown,last change at step 9,max wave 6.86 m >= 4.0 m; remaining cost +57.7% >= 5.0%,76.80535736670716,,
+125,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),40.55731641335757,40.55731641335757,0.0
+127,2,adopted,alternative 24.5% (515) cheaper,max wave 7.61 m >= 4.0 m; remaining cost +33.3% >= 5.0%,51.677747520951826,39.03960598018035,24.45567414804132
+128,4,adopted,alternative 7.7% (124) cheaper,max wave 5.11 m >= 4.0 m; remaining cost +9.1% >= 5.0%; periodic re-check (4 steps),39.28997813849605,36.247136584316394,7.744574312191606
+128,8,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),28.19559593083506,28.194624727424312,0.0034445216661859006
+129,4,retained,gain 2.3% (33) below threshold,periodic re-check (4 steps),34.480951186264335,33.682425474277494,2.315845951213027
+130,4,retained,gain 0.1% (1) below threshold,periodic re-check (4 steps),36.0420171550475,36.02119802373106,0.057763502045082044
+131,1,adopted,alternative 32.1% (820) cheaper,max wave 7.58 m >= 4.0 m; remaining cost +56.2% >= 5.0%,62.65532762461412,42.52407930819737,32.13014611786691
+131,2,cooldown,last change at step 1,max wave 6.06 m >= 4.0 m; remaining cost +35.9% >= 5.0%,55.091202327990985,,
+131,5,adopted,alternative 9.3% (178) cheaper,max wave 6.06 m >= 4.0 m; remaining cost +36.8% >= 5.0%; periodic re-check (4 steps),46.99961894351634,42.641034392127764,9.27365933886969
+131,8,retained,gain 0.0% (0) below threshold,max wave 4.32 m >= 4.0 m,34.443396963940685,34.443396963940685,0.0
+131,11,retained,gain 0.0% (0) below threshold,max wave 4.32 m >= 4.0 m,28.166206836323312,28.166206836323312,0.0
+131,15,retained,gain 0.3% (2) below threshold,periodic re-check (4 steps),20.819891578934975,20.765642060831826,0.260565805049817
+133,2,adopted,alternative 27.7% (618) cheaper,max wave 7.61 m >= 4.0 m; remaining cost +39.8% >= 5.0%,75.43984366100803,54.56824238233497,27.666548955828222
+134,4,adopted,alternative 9.0% (149) cheaper,max wave 5.11 m >= 4.0 m; remaining cost +11.2% >= 5.0%; periodic re-check (4 steps),55.74843048914497,50.71638585156292,9.026343151601122
+134,8,retained,gain 0.1% (1) below threshold,periodic re-check (4 steps),39.55319995603288,39.53327015920602,0.05038731846982752
+135,4,adopted,alternative 6.1% (91) cheaper,periodic re-check (4 steps),49.976806533704874,46.92105435852997,6.114340605404772
+136,4,retained,gain 0.1% (1) below threshold,periodic re-check (4 steps),50.24741335495389,50.199974737895204,0.09441006788463906
+137,1,adopted,alternative 35.4% (974) cheaper,max wave 7.58 m >= 4.0 m; remaining cost +66.0% >= 5.0%,92.76258068939403,59.888914556566995,35.43849889526158
+137,2,cooldown,last change at step 1,max wave 6.06 m >= 4.0 m; remaining cost +51.6% >= 5.0%,86.59841307764061,,
+137,5,adopted,alternative 18.3% (404) cheaper,max wave 6.06 m >= 4.0 m; remaining cost +53.5% >= 5.0%; periodic re-check (4 steps),74.38863242748467,60.760102467886405,18.320715833677394
+137,6,cooldown,last change at step 5,max wave 7.10 m >= 4.0 m; remaining cost +46.8% >= 5.0%,84.10322667315312,,
+137,7,cooldown,last change at step 5,max wave 7.05 m >= 4.0 m; remaining cost +47.6% >= 5.0%,78.93385574498652,,
+137,8,retained,gain 0.0% (0) below threshold,max wave 6.39 m >= 4.0 m,49.52785395342228,49.52785395342228,0.0
+137,9,adopted,alternative 42.5% (955) cheaper,max wave 7.10 m >= 4.0 m; remaining cost +65.3% >= 5.0%,75.83585345403411,43.59974598803879,42.507740069852815
+137,10,cooldown,last change at step 9,max wave 6.58 m >= 4.0 m; remaining cost +60.4% >= 5.0%,64.5012062930935,,
+137,11,cooldown,last change at step 9,max wave 6.65 m >= 4.0 m; remaining cost +48.8% >= 5.0%,54.60859835320596,,
+137,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),29.986914100970612,29.986914100970612,0.0
+139,2,adopted,alternative 31.8% (766) cheaper,max wave 7.61 m >= 4.0 m; remaining cost +47.8% >= 5.0%,81.14957420182311,55.303768314566035,31.849589035399305
+140,4,adopted,alternative 14.1% (250) cheaper,max wave 5.11 m >= 4.0 m; remaining cost +17.4% >= 5.0%; periodic re-check (4 steps),59.94412781419033,51.50058525597982,14.085687566233466
+140,8,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),40.07545859572492,40.07155879713258,0.00973113902869776
+141,4,adopted,alternative 5.9% (89) cheaper,periodic re-check (4 steps),50.64544875156317,47.65268357556283,5.909248016897026
+142,4,retained,gain 0.1% (2) below threshold,periodic re-check (4 steps),51.162196965548056,51.09333274103756,0.13459981899696147
+143,1,adopted,alternative 39.5% (1194) cheaper,max wave 7.58 m >= 4.0 m; remaining cost +79.7% >= 5.0%,102.13270755784504,61.83932291451394,39.45198909028244
+143,2,cooldown,last change at step 1,max wave 5.28 m >= 4.0 m; remaining cost +64.4% >= 5.0%,97.06530520753334,,
+143,5,adopted,alternative 20.7% (501) cheaper,max wave 5.28 m >= 4.0 m; remaining cost +62.7% >= 5.0%; periodic re-check (4 steps),81.6060610833158,64.70501620951583,20.710526460215778
+143,6,cooldown,last change at step 5,max wave 7.27 m >= 4.0 m; remaining cost +54.7% >= 5.0%,96.23399052706064,,
+143,7,cooldown,last change at step 5,max wave 6.84 m >= 4.0 m; remaining cost +62.2% >= 5.0%,94.29313984708362,,
+143,8,retained,gain 0.0% (0) below threshold,max wave 6.00 m >= 4.0 m,53.91861931768772,53.91861931768772,0.0
+143,9,adopted,alternative 47.8% (1247) cheaper,max wave 7.27 m >= 4.0 m; remaining cost +76.4% >= 5.0%,87.97122600740296,45.89674557911316,47.82754809481586
+143,10,cooldown,last change at step 9,max wave 6.08 m >= 4.0 m; remaining cost +67.2% >= 5.0%,71.18251563716892,,
+143,11,cooldown,last change at step 9,max wave 7.10 m >= 4.0 m; remaining cost +62.4% >= 5.0%,63.46753686865439,,
+143,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),32.08595637084192,32.08595637084192,0.0
+145,2,adopted,alternative 26.4% (575) cheaper,max wave 7.61 m >= 4.0 m; remaining cost +37.1% >= 5.0%,61.87830972791084,45.53087772326747,26.418678978992354
+146,4,adopted,alternative 8.4% (137) cheaper,max wave 5.11 m >= 4.0 m; remaining cost +10.1% >= 5.0%; periodic re-check (4 steps),46.19195481527036,42.29392263248949,8.438768608883896
+146,8,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),32.9379859539434,32.928477197862684,0.028868662747060153
+147,4,retained,gain 2.3% (33) below threshold,periodic re-check (4 steps),40.13548376955155,39.19459322166468,2.3442860519365776
+148,4,retained,gain 0.1% (1) below threshold,periodic re-check (4 steps),41.9885591818445,41.94929085177025,0.09352149928314467
+149,1,adopted,alternative 34.2% (911) cheaper,max wave 7.58 m >= 4.0 m; remaining cost +61.7% >= 5.0%,75.5940759004391,49.71309439102288,34.2367853580255
+149,2,cooldown,last change at step 1,max wave 6.16 m >= 4.0 m; remaining cost +42.3% >= 5.0%,67.43957052367978,,
+149,5,adopted,alternative 13.0% (264) cheaper,max wave 6.16 m >= 4.0 m; remaining cost +43.5% >= 5.0%; periodic re-check (4 steps),57.63723734957979,50.148135285310076,12.993513236672019
+149,6,cooldown,last change at step 5,max wave 6.83 m >= 4.0 m; remaining cost +32.7% >= 5.0%,62.79660973560992,,
+149,7,cooldown,last change at step 5,max wave 7.28 m >= 4.0 m; remaining cost +43.9% >= 5.0%,63.72618766115348,,
+149,8,retained,gain 0.0% (0) below threshold,max wave 6.39 m >= 4.0 m,41.037889253156415,41.037889253156415,0.0
+149,9,adopted,alternative 35.3% (695) cheaper,max wave 6.83 m >= 4.0 m; remaining cost +46.9% >= 5.0%,55.8896747880858,36.1363067144389,35.343501547548435
+149,10,cooldown,last change at step 9,max wave 6.58 m >= 4.0 m; remaining cost +58.6% >= 5.0%,52.89348378610816,,
+149,11,cooldown,last change at step 9,max wave 6.65 m >= 4.0 m; remaining cost +46.5% >= 5.0%,44.71096926343352,,
+149,13,retained,gain 0.0% (0) below threshold,periodic re-check (4 steps),24.960171817817237,24.960171817817237,0.0
