@@ -1,73 +1,93 @@
 # Loop Engineering — Nautilus
 
-This directory is the working memory for Nautilus development under the
-loop-engineering methodology described in
-[`docs/Source_Of_Truth.md`](../Source_Of_Truth.md) (§40–42).
+Working memory for Nautilus development sessions ("loops"). It records
+what is true in the repository, what comes next, and the evidence behind
+both — so an agent can start a session without relying on stale
+assumptions.
 
-**Branch:** `refactor/docker-containerization`
-**Status as of this writing:** Clean start. This directory was created fresh
-on this branch — it contains no RL/PPO history and no prior loop-engineering
-artifacts. Nothing here was migrated or reconstructed from another branch.
+**Last synchronized:** 2026-10-03 (Loop 005), branch
+`feature/dynamic-routing`, commit `e8f68d1`.
 
 ## Authoritative references
 
-Only two documents govern project direction:
+1. [`docs/Source_Of_Truth.md`](../Source_Of_Truth.md) — project scope,
+   architecture direction and roadmap. **If anything here conflicts with
+   it, the Source of Truth wins** (and the conflict should be fixed).
+2. [`PROJECT_STATE.md`](PROJECT_STATE.md) — what is actually implemented
+   in the repository now, verified against code and test runs.
+3. The code and tests themselves. A document claim that the code does not
+   support is a documentation bug.
 
-1. [`README.md`](../../README.md) — what the repository contains and how to
-   run it today.
-2. [`docs/Source_Of_Truth.md`](../Source_Of_Truth.md) — the authoritative
-   statement of project goals, architecture direction, phases, and scope.
-   If anything in this directory conflicts with it, the Source of Truth wins.
+### Important: the Source of Truth was rewritten on 2026-10-03
 
-The previous reinforcement-learning direction is explicitly out of scope
-(Source of Truth §43–44) and is not referenced by any file in this
-directory.
+The current Source of Truth defines Nautilus as an **ML-assisted dynamic
+ship-rerouting system**. The previous version (multi-algorithm
+comparison, evidence-based algorithm selection, remote Docker
+development, offline packaging) is superseded.
+
+Entries written before that rewrite (Loops 000–002 and the 2026-10-02
+Docker reorganization) cite section numbers such as "§25–26", "§39" or
+"§40–42". **Those refer to the previous Source of Truth**, not the
+current one. The previous version can be read with
+`git show 79f130b:docs/Source_Of_Truth.md`. Such entries are kept as
+history and labeled where they matter.
 
 ## File index
 
-| File | Purpose |
+| File | Role |
 | --- | --- |
-| [`PROJECT_STATE.md`](PROJECT_STATE.md) | What actually exists in the repo right now, vs. planned/unknown. |
-| [`TASKS.md`](TASKS.md) | The phased roadmap and the current task queue. |
-| [`DECISIONS.md`](DECISIONS.md) | Standing decisions that constrain future work. |
-| [`EXPERIMENTS.md`](EXPERIMENTS.md) | Experiment definitions and results. |
-| [`LOOP_LOG.md`](LOOP_LOG.md) | Chronological log of each development loop. |
-| [`BLOCKERS.md`](BLOCKERS.md) | Open blockers and unresolved questions. |
-| [`VALIDATION.md`](VALIDATION.md) | Definition-of-done checklists used to validate a task before closing it. |
-| [`CHANGE_LOG.md`](CHANGE_LOG.md) | Human-readable summary of what changed, loop by loop. |
+| [`PROJECT_STATE.md`](PROJECT_STATE.md) | What is true in the repository now: implemented / planned / deferred, entry points, limitations. |
+| [`TASKS.md`](TASKS.md) | Current and next goal with status; roadmap phase status; historical tasks (labeled). |
+| [`DECISIONS.md`](DECISIONS.md) | Durable decisions (confirmed vs. superseded) and unresolved choices. |
+| [`BLOCKERS.md`](BLOCKERS.md) | Active blockers, open technical concerns/risks, resolved items. |
+| [`EXPERIMENTS.md`](EXPERIMENTS.md) | Measured evidence and findings; planned experiments marked as such. |
+| [`VALIDATION.md`](VALIDATION.md) | What was verified, how, and with what result; definition-of-done checklists. |
+| [`LOOP_LOG.md`](LOOP_LOG.md) | Session-by-session development history (newest first). |
+| [`CHANGE_LOG.md`](CHANGE_LOG.md) | Concise record of meaningful file-level changes (newest first). |
 
-## How to use this during a loop
+Other active references outside this directory: [`README.md`](../../README.md)
+(how to run things) and [`DOCKER.md`](../../DOCKER.md) (container workflow).
 
-```text
-Read TASKS.md -> pick the one READY task
-    |
-    v
-Read PROJECT_STATE.md -> confirm assumptions still hold
-    |
-    v
-Implement
-    |
-    v
-Validate against VALIDATION.md
-    |
-    v
-Record results in EXPERIMENTS.md (if measurable)
-    |
-    v
-Append an entry to LOOP_LOG.md and CHANGE_LOG.md
-    |
-    v
-Update PROJECT_STATE.md and TASKS.md to reflect the new state
-    |
-    v
-Promote exactly one new task to READY
-```
+## Reading order for a new session
 
-Rules (from Source of Truth §41):
+1. `docs/Source_Of_Truth.md` — at least §1–7 and §16 (roadmap).
+2. `PROJECT_STATE.md` — current implementation state.
+3. `TASKS.md` — the current/next goal and its status.
+4. `BLOCKERS.md` — open concerns that may affect the goal.
+5. `DECISIONS.md` — constraints already decided.
+6. As needed: the latest `LOOP_LOG.md` entry, `VALIDATION.md`,
+   `EXPERIMENTS.md`.
 
-- Work on one task at a time.
-- Avoid unrelated refactoring.
-- Avoid implementing future phases early.
-- Never silently expand scope.
-- If an unrelated issue is discovered, record it (in `BLOCKERS.md` or a
-  task note) rather than fixing it inline unless it blocks the current task.
+Then verify any claim you depend on against the code (and run
+`python -m unittest discover -s tests` — about 45 s).
+
+## Maintenance convention
+
+After completing a **meaningful** implementation goal (new capability,
+behavior change, architectural decision, changed project status):
+
+1. Update `PROJECT_STATE.md` to match the repository.
+2. Update `TASKS.md`: mark the goal done (with evidence pointer) and
+   record the next goal — as *proposed* unless the user confirmed it.
+3. Add durable decisions to `DECISIONS.md`; mark any it supersedes.
+4. Record measured results in `EXPERIMENTS.md` and the checks actually
+   run, with outcomes, in `VALIDATION.md`.
+5. Add a concise `LOOP_LOG.md` entry (date, commit if known, what was
+   done, validation, decision, next).
+6. Update `BLOCKERS.md` and `CHANGE_LOG.md` when something was found,
+   resolved or changed.
+7. Check the Source of Truth still matches the direction and status;
+   update its status markers if a roadmap phase changed.
+
+Rules:
+
+- Trivial edits (typos, refactors without behavior change, test tweaks)
+  need no documentation update, or at most a `CHANGE_LOG.md` line.
+- Never record a result that was not actually produced; say "not run" or
+  "unknown" instead. Mark prior results as prior when not re-run.
+- Keep facts in one place and point to it; don't copy details across
+  files.
+- Historical entries are not rewritten to look cleaner — label them
+  superseded/historical instead.
+- One goal at a time; record unrelated issues in `BLOCKERS.md` rather
+  than fixing them inline.

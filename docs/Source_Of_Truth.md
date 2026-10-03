@@ -3,7 +3,7 @@
 **Project:** Nautilus
 **Category:** ML-Assisted Dynamic Ship Routing System
 **Primary Focus:** Weather-Aware Rerouting and Machine Learning
-**Status:** Existing routing foundation with dynamic rerouting and ML integration as the next development goals.
+**Status (2026-10-03):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented. Next: route cost/ETA consistency and ML speed integration (Phase 3, proposed). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
 
 ---
 
@@ -198,6 +198,14 @@ The existing dataset contains approximately 20 ports and an evaluation script fo
 These can serve as the initial evaluation cases for static and dynamic routing.
 
 The current evaluation process should be extended to include changing weather and rerouting behavior.
+
+### 5.7 Implemented Rerouting Capabilities
+
+As of 2026-10-03:
+
+* **Current-position rerouting:** `Router.search` routes from any navigable grid cell; invalid or non-navigable start/goal cells raise an error; `RouteResult.cost` and `Router.path_cost` expose the routing cost for comparisons.
+* **Threshold-based dynamic rerouting (simulation):** `src/weather_sim.py` (deterministic simulated weather updates) and `src/rerouting.py` (vessel progress along the active route, remaining-route evaluation, configurable triggers, cooldown, improvement thresholds, rerouting event log). Defaults are the `REROUTE_*` settings in `config.py`. Run it with `python -m src.rerouting`.
+* Not yet implemented: ETA derived from the routing cost (§10), rerouting in the UI (§12), static-vs-dynamic evaluation across the fixed voyage set, and ML rerouting decisions (§8.2).
 
 ---
 
@@ -634,6 +642,10 @@ The project should use a goal-oriented, iterative engineering workflow.
 * Do not claim a feature is implemented until it has been verified.
 * Document known limitations and failed experiments honestly.
 
+### Project Records
+
+`docs/loop-engineering/` holds the working records: current state, tasks, decisions, blockers, experiments, validation and session history. Its `README.md` gives the reading order and a short maintenance convention. Update these records after meaningful implementation goals, not after trivial edits.
+
 ---
 
 ## 15. Known Limitations and Technical Risks
@@ -677,6 +689,8 @@ Development should proceed in the following order.
 
 ### Phase 1 — Rerouting Foundation
 
+**Status:** Done (2026-10-03), except "Verify ETA and cost consistency", which moves to Phase 3.
+
 **Objective:** Make the existing routing engine capable of recalculating routes during a voyage.
 
 Tasks:
@@ -690,6 +704,8 @@ Tasks:
 **Completion condition:** The system can generate and compare a new route from an intermediate position on an existing voyage.
 
 ### Phase 2 — Weather Updates and Rerouting Triggers
+
+**Status:** Done in simulation (2026-10-03).
 
 **Objective:** Make rerouting respond to changing environmental conditions.
 
@@ -705,6 +721,8 @@ Tasks:
 
 ### Phase 3 — ML Speed Prediction Integration
 
+**Status:** Next (proposed). The ML model already drives weather-aware routing costs; ETA is not yet aligned with it.
+
 **Objective:** Use the existing ML model consistently across route planning and evaluation.
 
 Tasks:
@@ -719,6 +737,8 @@ Tasks:
 
 ### Phase 4 — Evaluation and Visualization
 
+**Status:** Not started. A console scenario evaluation (`python -m src.rerouting`) exists; no UI integration yet.
+
 **Objective:** Demonstrate and measure the rerouting workflow.
 
 Tasks:
@@ -732,6 +752,8 @@ Tasks:
 **Completion condition:** A user can observe a complete simulated voyage with at least one weather-driven rerouting scenario and inspect the resulting metrics.
 
 ### Phase 5 — Experimental ML Rerouting Decisions
+
+**Status:** Not started (optional).
 
 **Objective:** Determine whether ML can improve rerouting decisions beyond simple thresholds.
 

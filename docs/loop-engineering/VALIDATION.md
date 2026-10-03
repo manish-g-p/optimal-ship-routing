@@ -1,20 +1,101 @@
 # Validation
 
-Definition-of-done checklists, adapted from `docs/Source_Of_Truth.md` §42.
-A task is not complete merely because code was written or a command ran
-once without error.
+What was verified, how, and with what result. Newest records first. Each
+record states whether checks were **run in that loop** or are **reported
+from an earlier loop**. A goal is not complete merely because code was
+written or a command ran once without error.
+
+Standard checks for routing/rerouting changes:
+
+```bash
+python -m unittest discover -s tests -v          # 23 tests at e8f68d1, ~45 s
+python -m src.rerouting                          # scenario table (EXP-003)
+python -m src.evaluate                           # then diff evaluation.csv vs. the committed
+                                                 # file excluding trad_sec/prop_sec; restore it
+docker build -f docker/Dockerfile -t nautilus-dev .
+docker run --rm --network none nautilus-dev python -m unittest discover -s tests
+```
 
 ---
 
-## General principle
+## Definition of done — rerouting / routing work (current)
 
-A completed loop has: Change + Validation + Measurements (where
-applicable) + Analysis + Decision + Updated project state (Source of
-Truth §40). "It runs" is necessary but not sufficient.
+- [ ] Existing tests pass (`tests/`), run in this loop.
+- [ ] New behavior has deterministic tests, including failure/invalid cases.
+- [ ] Initial routes unchanged: `test_evaluation_voyages_unchanged` passes
+      and `src.evaluate` output matches the committed CSV (non-timing
+      columns), unless a change is intended and recorded.
+- [ ] Route comparisons use one cost model (Decision 006).
+- [ ] Routes are navigable, 8-connected, start at the vessel/origin and
+      end at the destination.
+- [ ] Offline/Docker still works when dependencies or entry points change.
+- [ ] Results recorded in `EXPERIMENTS.md`; docs updated per
+      `README.md` → Maintenance convention.
+
+## Validation slot — next goal (ETA / cost consistency, ML integration)
+
+Not started. Record here: the checks run, their actual outcomes, and the
+before/after `time_hours` vs. cost-derived time on the fixed voyages.
 
 ---
 
-## Definition of done — Routing algorithm work
+## Loop 005 — documentation synchronization (checks run in this loop)
+
+At commit `e8f68d1`, before editing any documentation:
+
+- [x] `python -m unittest discover -s tests -v` (host `.venv`): **Ran 23
+      tests in 42.3 s — OK** (8 in `test_routing`, 15 in
+      `test_rerouting`).
+- [x] `python -m src.rerouting` (host): scenario table identical to
+      EXP-003.
+- [x] Offline Docker: `docker build -f docker/Dockerfile -t nautilus-dev .`,
+      then `docker run --rm --network none nautilus-dev python -m unittest
+      discover -s tests` → **Ran 23 tests in 50.1 s — OK**, and
+      `... python -m src.rerouting` → identical scenario table. Built from
+      the working tree, where only documentation differed from `e8f68d1`.
+      This closes the gap noted for Loop 004 below.
+- [x] scikit-learn pickle warning still present (C5); `networkx` still
+      unimported (C7); `docs/*.pdf`/`.pptx` tracked in git (C8).
+- [x] No application code, tests, configuration or dependencies changed
+      (`git status` shows only `.md` files modified).
+
+## Loop 004 — weather-driven dynamic rerouting (reported from Loop 004)
+
+- [x] `python -m unittest discover -s tests -v`: 23 tests OK (~46 s),
+      after the final code change. During development, 3 failures were
+      test-design issues (a wave threshold the calm Gulf never reached;
+      storms placed on the initial route that missed the rerouted path)
+      and were fixed in the tests.
+- [x] `python -m src.rerouting`: results as in EXP-003.
+- [x] `python -m src.evaluate`: identical to committed `evaluation.csv`
+      excluding timing columns (CSV restored afterwards).
+- [x] Docker image rebuilt and run with `--network none`: 23 tests OK, same
+      scenario results. Run **before** a final behavior-neutral refactor
+      of `RerouteController._done`; re-run at HEAD in Loop 005 (above).
+
+## Loop 003 — current-position rerouting (reported from Loop 003)
+
+- [x] `python -m unittest discover -s tests -v`: **8 tests OK** (~15 s).
+- [x] Same tests against the original `src/routing.py`
+      (`git show HEAD:src/routing.py`): 13 failures, 14 errors. The
+      invalid-position tests failed, and the cost tests errored because
+      `cost`/`path_cost` did not exist. The initial-route regression test
+      passed on both versions.
+- [x] `python -m src.evaluate`: identical to committed `evaluation.csv`
+      excluding timing columns (CSV restored afterwards).
+- [x] Flask `POST /api/route` (test client, Mumbai → Chennai, rough,
+      General Cargo): HTTP 200, Dijkstra 2953.6 km, A* 2954.9 km
+      (unchanged).
+
+---
+
+## Historical — definitions of done under the previous Source of Truth
+
+The checklists below were adapted from the **previous** Source of Truth
+(§40–42) in Loops 000–001. They are kept as history. "Remote validation"
+and "Offline deployment" refer to goals now deferred (`TASKS.md`).
+
+### Definition of done — Routing algorithm work (historical)
 
 ```text
 Implementation
@@ -25,9 +106,9 @@ Implementation
 + Documentation
 ```
 
-Not yet applicable this loop — no routing algorithm work was done.
+Superseded by "rerouting / routing work (current)" above.
 
-## Definition of done — Deployment work (applies to TASK-001)
+### Definition of done — Deployment work (applies to TASK-001)
 
 ```text
 Build
@@ -67,7 +148,7 @@ Checklist for TASK-001 — all verified against a real Docker engine,
       done criteria — that is TASK-004, once TASK-002/003 exist. Not
       attempted here, consistent with that scoping.
 
-## Definition of done — Offline deployment work (future, Phase 7)
+### Definition of done — Offline deployment work (old Phase 7, deferred)
 
 ```text
 Package
@@ -82,9 +163,7 @@ Package
 Not applicable yet — recorded here only so Phase 7 work starts from the
 same definition of done, rather than inventing one later.
 
----
-
-## Validation performed for Loop 001 (TASK-001)
+### Validation performed for Loop 001 (TASK-001)
 
 Unlike Loop 000, this loop produced real, executable changes, so
 validation means actual builds and runs against a live Docker engine, not
@@ -119,9 +198,7 @@ a consistency check:
       confirmed by diff; not committed, confirmed by `git log`/`git
       show`) rather than left as vague flags.
 
----
-
-## Validation performed for Loop 000 (initialization)
+### Validation performed for Loop 000 (initialization)
 
 Since this loop is documentation-only, validation means a consistency
 check rather than a functional test:

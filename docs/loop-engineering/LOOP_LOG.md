@@ -1,6 +1,121 @@
 # Loop Log
 
-Chronological record of each development loop. Newest entry on top.
+Development-session history. Newest entry on top. File-level detail lives
+in `CHANGE_LOG.md`, evidence in `VALIDATION.md` / `EXPERIMENTS.md`.
+
+Loops 000–002 ran under the **previous** Source of Truth (branch
+`refactor/docker-containerization`). Their "§" references and "next
+task: TASK-002" are historical; see `README.md`.
+
+---
+
+## Loop 005 — Documentation synchronization
+
+**Date:** 2026-10-03
+**Branch / commit:** `feature/dynamic-routing` @ `e8f68d1` (changes uncommitted at time of writing)
+**Task:** User-directed: bring the Source of Truth and all
+loop-engineering records in line with the current direction and code.
+Documentation only.
+
+**What was done:**
+
+1. Read the Source of Truth and every file in `docs/loop-engineering/`,
+   plus `README.md` and `DOCKER.md`. Checked the code (`src/routing.py`,
+   `src/rerouting.py`, `src/weather_sim.py`, `config.py`, tests) and git
+   history.
+2. Found that the brief's premise was out of date: it described
+   weather-driven dynamic rerouting as the *next, unimplemented* goal,
+   but it was already committed (`e8f68d1`, Loop 004) and passing tests.
+   Documented it as implemented (with point-by-point evidence in
+   `TASKS.md`) instead of planned. Recorded the roadmap's next phase
+   (Phase 3, ETA/cost + ML integration) as **proposed**, pending user
+   confirmation.
+3. Re-ran tests and the scenario evaluation on the host and offline in
+   Docker (`VALIDATION.md` → Loop 005). Re-checked old open questions
+   (sklearn skew, `networkx`, tracked PDFs).
+4. Rewrote `README.md` (navigation, reading order, maintenance
+   convention), `PROJECT_STATE.md` and `TASKS.md` for the current state.
+   Restructured `BLOCKERS.md`. Added decisions 004–009 to `DECISIONS.md`
+   and marked 001 superseded. Added EXP-002/003 and planned experiments.
+   Added Loop 003–005 records here and in `VALIDATION.md` /
+   `CHANGE_LOG.md`. Updated the Source of Truth status line, roadmap
+   status, §5 implemented capabilities and §14 maintenance pointer.
+   Updated stale references in `DOCKER.md` and the feature list in root
+   `README.md`.
+
+**Validation:** see `VALIDATION.md` → Loop 005.
+
+**Decision:** Documentation reflects `e8f68d1`. Next goal proposed, not
+started.
+
+**Next:** User to confirm the next goal (Phase 3 proposed; Phase 4 is the
+alternative).
+
+---
+
+## Loop 004 — Weather-driven dynamic rerouting
+
+**Date:** 2026-10-03 (committed as `e8f68d1`, "feat: weather driven
+re-routing added and simulations passed")
+**Branch:** `feature/dynamic-routing`
+**Task:** User-directed: Source of Truth Phase 2 — simulated weather
+updates, vessel progress, remaining-route evaluation, threshold-based
+controller, scenario tests.
+
+**What was done:** Added `src/weather_sim.py` (deterministic wave-height
+perturbations, named scenarios), `src/rerouting.py` (controller, voyage
+simulation, event log, console evaluation), `REROUTE_*` defaults in
+`config.py`, `tests/test_rerouting.py` (15 tests, scenarios A–E), and a
+README section. Updated Source of Truth §15. No change to
+`src/routing.py`. During development: added a periodic re-check trigger
+(an improving alternative was otherwise never noticed); fixed it
+re-firing every step; recorded the search after adoption to avoid a
+wasted re-search; widened the `improving_alt` storm so the scenario
+exercises an adoption; replaced a Scenario D design whose storms missed
+the rerouted path.
+
+**Validation:** `VALIDATION.md` → Loop 004; results in EXP-003.
+
+**Decision:** Phase 2 done at simulation level (Decisions 006–008). The
+loop stopped without starting ML decision work, as instructed.
+
+**Next (as stated then):** not assigned; limitations listed (now
+`BLOCKERS.md` C1–C4).
+
+---
+
+## Loop 003 — Current-position rerouting
+
+**Date:** 2026-10-03 (committed as `6fdfd91`, "fix: minor failures and
+bugs in routing fixed", together with the user's Source of Truth rewrite,
+which was already in the working tree when the loop started)
+**Branch:** `feature/dynamic-routing`
+**Task:** User-directed: Source of Truth Phase 1 — implement and validate
+rerouting from an arbitrary valid intermediate position.
+
+**What was done:** Inspected routing, grid, ports, evaluation, server and
+ML code. Probed behavior (EXP-002): arbitrary starts already worked, but
+the search cost was not exposed and invalid starts were silently
+accepted. Added start/goal validation (`ValueError`), `RouteResult.cost`
+and `Router.path_cost` to `src/routing.py`. Created `tests/` (stdlib
+`unittest`, 8 tests). Added a tests section to the README.
+
+**Validation:** `VALIDATION.md` → Loop 003.
+
+**Decision:** Phase 1 done except ETA/cost consistency (Decision 005).
+Loop-engineering documents were **not** updated in this loop. That gap
+was closed in Loop 005.
+
+**Next (as stated then):** stop; await the next milestone.
+
+---
+
+## Note — 2026-10-02 Docker file reorganization (no loop entry)
+
+Commit `79f130b` moved the Docker files into `docker/` and updated
+`DOCKER.md`, `CHANGE_LOG.md` and `PROJECT_STATE.md`. No `LOOP_LOG.md` entry
+was written at the time. Whether it was run as a numbered loop is
+unknown. Details: `CHANGE_LOG.md` (2026-10-02).
 
 ---
 

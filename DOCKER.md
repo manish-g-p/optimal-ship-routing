@@ -1,9 +1,9 @@
 # Running Nautilus in Docker
 
-This is a **development** image — source + full dependency set — not yet
-the minimal production/distribution image described in
-`docs/Source_Of_Truth.md` (that split is a later decision). It is **not**
-published anywhere (no Docker Hub push, no remote-server deployment).
+This is a **development** image — source + full dependency set. A
+minimal production/distribution image is not on the current roadmap. It
+is **not** published anywhere (no Docker Hub push, no remote-server
+deployment).
 
 **All commands below are run from the project root** (the directory this
 file is in), even though the Docker files themselves live in `docker/`.
@@ -69,6 +69,14 @@ docker run --rm nautilus-dev python run_all.py
 
 Both run fully offline — add `--network none` yourself to confirm no
 network access is used at all.
+
+**Run the tests and the dynamic-rerouting scenarios** (verified offline
+at `e8f68d1`, see `docs/loop-engineering/VALIDATION.md`):
+
+```bash
+docker run --rm --network none nautilus-dev python -m unittest discover -s tests
+docker run --rm --network none nautilus-dev python -m src.rerouting
+```
 
 **Run the Flask UI** (Google Maps key optional — map tiles won't render
 without one, everything else works):
@@ -233,7 +241,8 @@ by Docker or this file move. See `docs/loop-engineering/BLOCKERS.md`.
 
 `src/routing.py` computes ETA from distance at a constant speed rather
 than the accumulated weather-aware cost. Unaffected by this
-reorganization (no routing code was touched). Still open for Phase 2.
+reorganization (no routing code was touched). Still open — see
+`docs/loop-engineering/BLOCKERS.md` C1.
 
 ### Production/offline-distribution image not yet built
 
@@ -242,7 +251,8 @@ A minimal, distribution-focused image is a separate, later goal.
 
 ### Docker Hub / remote server
 
-Not in scope here. See `docs/loop-engineering/TASKS.md`.
+Not on the current roadmap (deferred). See
+`docs/loop-engineering/TASKS.md` → Historical tasks.
 
 ## Secret management
 

@@ -1,95 +1,114 @@
-# Blockers
+# Blockers and Open Concerns
 
-Open blockers and unresolved questions. A "blocker" here means something
-that prevents a task from being completed or validated — not every open
-question is a blocker.
+**Last reviewed:** 2026-10-03 (Loop 005) at commit `e8f68d1`.
+
+- **Blocker:** prevents the current/next goal from being done or validated.
+- **Open concern:** a known correctness issue, risk or limitation that
+  future work must account for, but that does not block it.
+- **Resolved / historical:** kept so earlier references stay traceable.
 
 ---
 
 ## Active blockers
 
-None. TASK-002 (current READY task — Docker Hub image workflow) is not
-blocked technically; it is simply not started yet because the loop that
-completed TASK-001 was explicitly scoped to stop short of Docker Hub
-publishing and remote-server configuration.
+None. The proposed next goal (`TASKS.md`) only needs user confirmation.
 
 ---
 
-## Open questions (not blocking, but need an answer during relevant work)
+## Open concerns
 
-### Q1 — Unpinned dependency versions — RESOLVED (Loop 001)
+### C1 — ETA is not derived from the routing cost (correctness issue)
 
-`requirements.txt` now pins all 16 direct dependencies to the versions
-captured from the host `.venv` and verified working inside the Docker
-image (see `DOCKER.md`, EXP-001 in `EXPERIMENTS.md`).
+`Router._finalize` sets `time_hours = distance_km / (SHIP_SPEED_KN × 1.852)`
+with `SHIP_SPEED_KN = 18` (`src/routing.py`, `config.py`). It ignores
+weather, the ML speed model and the vessel's service speed, so A* routes
+chosen for travel time report constant-speed ETAs. Source of Truth §10
+treats this as a correctness issue. **Does not block rerouting**:
+decisions use `cost` (Decision 006). It is the core of the proposed next
+goal. (Formerly Q2, which described the same code against a previous
+Source of Truth claim that the ETA had been fixed. That claim no longer
+exists; the code is unchanged.)
 
-### Q2 — ETA calculation discrepancy
+### C2 — Cost units depend on the cost model
 
-`docs/Source_Of_Truth.md` §25–26 states the ETA implementation was
-corrected to use the accumulated routing cost instead of a constant-speed
-distance calculation. Repository inspection shows `src/routing.py` on
-this branch still computes ETA as `distance_km / constant_speed` for both
-Dijkstra and A*. This does not block TASK-001 (Docker containerization
-does not require routing-logic changes), but it should be the first item
-examined in Phase 2 ("Stabilize the Existing Routing System") rather than
-assumed already resolved. No code was changed to investigate this further
-during this initialization loop — investigation only, no fix attempted,
-per task scope.
+`RouteResult.cost` / `Router.path_cost` are in km (Dijkstra), km × analytic
+wave multiplier (`Router(grid, weather)`), or km at service speed (ML
+multiplier; ÷ (service kn × 1.852) gives hours). Comparing costs from
+different routers is meaningless. The rerouting controller always uses
+one router per comparison. Risk for future evaluation code.
 
-### Q3 — Container base-image system dependencies — RESOLVED (Loop 001)
+### C3 — A* heuristic may not be admissible (unverified impact)
 
-Verified: `netCDF4`, `xarray`, `scipy`, `scikit-learn`, and every other
-pinned dependency install and import cleanly on a plain
-`python:3.12-slim` base image, with no extra `apt` packages. Confirmed
-with `--network none` at both build-cached and full `--no-cache` rebuild.
+`Router._heuristic` scales longitude by `cos(mean grid latitude)` ≈
+cos 13.5°. North of that, it overstates east–west distance (at 27°N by
+about cos 13.5° / cos 27° ≈ 1.09, i.e. ~9%), while the module docstring
+claims admissibility/optimality. A* could therefore return slightly
+suboptimal routes there. Not observed: rerouted costs matched the
+remaining optimal costs exactly in the Loop 003 tests (Mumbai → Chennai).
+Not measured on northern east–west voyages. Risk.
 
-### Q4 — `networkx` usage
+### C4 — Rerouting is a simplified simulation
 
-`networkx` is listed in `requirements.txt` but no import of it was found
-during inspection of `src/*.py`, `server.py`, `app.py`, `run_all.py`.
-Unconfirmed whether it is actually required. Not resolved in this loop
-(no dependency changes were made, per task scope) — noted for whoever
-next touches `requirements.txt`.
+Implemented in Loop 004, with these known limits:
 
-### Q5 — Deployment target specifics for the remote server
+- Weather updates are synthetic Gaussian changes to wave height only
+  (period and direction unchanged); no forecast timeline.
+- Vessel movement is a fixed number of cells per step, not time- or
+  speed-based.
+- Scenarios and thresholds were tuned on one voyage (Cochin → Dubai,
+  General Cargo, `typical` base weather). On `rough` weather, the 4.0 m
+  wave trigger is near the 90th-percentile wave height of navigable cells
+  (≈ 4.02 m, measured in Loop 004), so it would fire often.
+- A rejected alternative is not re-searched while weather and route are
+  unchanged (`DECISIONS.md` → Unresolved).
+- Missing/invalid/stale weather handling (Source of Truth §9.3) is not
+  implemented for the simulation; live weather is not connected to it.
+- Not exposed in the Flask or Streamlit UI (Phase 4).
 
-The remote server's OS, available Docker version, and resource limits
-are not described in any repository document. TASK-003/TASK-004
-(pull-and-run on the remote server) will need this information when they
-become active; it was not needed for TASK-001 and is not needed for
-TASK-002 (Docker Hub publishing doesn't require knowing the pull target).
-
-### Q6 — scikit-learn version skew in the shipped ML model artifact (new, Loop 001)
+### C5 — scikit-learn version skew in the ML model artifact (formerly Q6)
 
 `data/processed/speed_model.joblib` was pickled with scikit-learn 1.8.0;
-the host `.venv` and the now-pinned `requirements.txt` both have 1.9.0.
-Loading the model prints an `InconsistentVersionWarning`. Investigated in
-Loop 001 (EXP-001): container output matched the host-committed baseline
-byte-for-byte on every non-timing column, so behavior is unaffected
-today. This is pre-existing (same skew exists on the host, outside
-Docker) and not a containerization problem, so it was not fixed as part
-of TASK-001 — fixing it means either retraining the model under 1.9.0 or
-pinning scikit-learn to 1.8.0, both of which are ML/dependency decisions
-for whoever picks up Phase 2 routing-foundation work, not a Docker task.
+`requirements.txt` pins 1.9.0. Re-checked in Loop 005: loading still emits
+`InconsistentVersionWarning` (62 warnings). Loop 001 found no effect on
+`evaluation.csv`, and evaluation output has matched the baseline in every
+check since. Fix options (retrain under 1.9.0, or pin 1.8.0) fit the
+Phase 3 ML work. Risk.
 
-### Q7 — Real-looking Google Maps API key found locally in `web_config.py` (Loop 001) — MIGRATED, not resolved (Loop 002)
+### C6 — Google Maps API key rotation (formerly Q7) — human decision
 
-Originally found in Loop 001: a real-looking key as `web_config.py`'s
-local, uncommitted default. Confirmed then (and still true) that it was
-never committed or pushed — `git log --follow`/`git show
-origin/main:web_config.py` showed no trace of it in any commit.
+A real-looking key existed as a local, uncommitted default in
+`web_config.py` (Loop 001; confirmed never committed or pushed). Loop 002
+moved it to the gitignored `.env` and deleted `web_config.py`, without
+printing it. Whether the key is live, billable or needs rotation is
+still the developer's decision; no loop has assumed or acted on it.
 
-**Loop 002 update:** as part of centralizing configuration into `.env`
-(see `PROJECT_STATE.md` and `DOCKER.md` "Secret management"), that local
-value was migrated into a new, gitignored `.env` file and
-`web_config.py` was deleted (`git rm -f`, since it still carried the
-uncommitted value — the value was read and moved before deletion, not
-discarded). The key itself was never printed in full in any command
-output, log, or document produced by either loop.
+### C7 — `networkx` dependency appears unused (formerly Q4)
 
-**Still open, still a human decision:** this only *relocated* the key to
-where it's supposed to live (a local, gitignored `.env`) — it did not
-determine whether the key is real/live, whether it's billable, or
-whether it has ever been shared/synced anywhere outside this machine. If
-so, rotating it in Google Cloud Console is still your call, not
-something either loop assumed or acted on.
+Pinned in `requirements.txt`; still not imported anywhere (re-checked in
+Loop 005 with a repo-wide grep). Remove only as part of a deliberate
+dependency change.
+
+### C8 — Documentation risks
+
+- Pre-2026-10-03 records cite old Source of Truth section numbers
+  (explained in `README.md`).
+- Root `README.md` says PDF/PowerPoint files are "not uploaded to GitHub",
+  but `docs/*.pdf` and `docs/Nautilus_Slides.pptx` are tracked in git
+  (verified in Loop 005). Which is intended is unknown; not changed.
+- The PDF/PPTX project documents (report, slides, guides) were not
+  reviewed and may describe the earlier project direction.
+
+---
+
+## Resolved / historical
+
+| Item | Status |
+| --- | --- |
+| Q1 — Unpinned dependency versions | Resolved in Loop 001 (pinned `requirements.txt`). |
+| Q2 — ETA discrepancy vs. previous Source of Truth claim | Reframed as **C1** (the claim is gone; the issue remains). |
+| Q3 — Container base-image system dependencies | Resolved in Loop 001 (plain `python:3.12-slim` suffices). |
+| Q4 — `networkx` usage | Still open as **C7**. |
+| Q5 — Remote server specifics (OS, Docker version, limits) | **Deferred**: remote deployment (old TASK-003/004) is not on the current roadmap. |
+| Q6 — scikit-learn pickle skew | Still open as **C5**. |
+| Q7 — Local Google Maps key | Migrated to `.env` (Loop 002); rotation decision open as **C6**. |
+| Silent navigability violation for invalid start positions | Found and fixed in Loop 003 (`Router.search` validation). |

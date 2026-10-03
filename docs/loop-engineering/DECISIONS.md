@@ -1,16 +1,38 @@
 # Decisions
 
-Standing decisions that constrain future loops. Only decisions required to
-establish the current project direction are recorded here; nothing
-speculative about later phases (no metric weights, no final recommendation
-formula, no offline packaging mechanism — those are deferred, per
-`docs/Source_Of_Truth.md` §23 and the current loop's explicit scope).
+Durable decisions that constrain future work, plus unresolved choices.
+Status per decision: **Confirmed** (in force), **Superseded** (kept for
+history), or listed under *Unresolved*.
+
+Decisions 001–003 were recorded in Loop 000 under the **previous** Source
+of Truth; their "§" references point to that version
+(`git show 79f130b:docs/Source_Of_Truth.md`). Decisions 004+ refer to the
+current Source of Truth (2026-10-03).
+
+## Summary
+
+| ID | Decision | Status |
+| --- | --- | --- |
+| 001 | Direction: algorithm expansion / evidence-based selection / remote Docker / offline | **Superseded** by 004 |
+| 002 | Docker as the development environment | **Confirmed** (remote-server motivation no longer on the roadmap) |
+| 003 | Offline-first core operation | **Confirmed** |
+| 004 | Direction: ML-assisted dynamic rerouting | **Confirmed** |
+| 005 | Rerouting reuses `Router.search`; explicit invalid-position errors | **Confirmed** |
+| 006 | Route comparison uses routing cost from one `Router`, not `time_hours` | **Confirmed** |
+| 007 | Threshold-based rerouting controller rules | **Confirmed** (baseline) |
+| 008 | Simulation model: route-cell position, deterministic `swh` perturbations, ML cost by default | **Confirmed** (prototype) |
+| 009 | Tests use stdlib `unittest` and committed data | **Confirmed** |
 
 ---
 
-## Decision 001 — Current project direction
+## Decision 001 — Current project direction — SUPERSEDED
 
-**Decision:** Nautilus's active development direction, as of this branch,
+> **Superseded on 2026-10-03 by Decision 004** (Source of Truth rewrite).
+> Kept as history. The RL exclusion below still holds under 004; the
+> algorithm-expansion, evidence-based-selection and remote-deployment
+> goals do not.
+
+**Decision (historical):** Nautilus's active development direction, as of this branch,
 is:
 
 - Routing algorithm expansion
@@ -32,7 +54,11 @@ not become a mandatory dependency for future algorithms.
 
 ---
 
-## Decision 002 — Docker as the development environment
+## Decision 002 — Docker as the development environment — CONFIRMED
+
+> Still in force: the current Source of Truth §13 keeps Docker-based,
+> reproducible execution. The remote-server motivation and Docker Hub
+> publishing are no longer on the roadmap (see `TASKS.md`).
 
 **Decision:** Docker will be used to provide a reproducible Nautilus
 development/runtime environment, primarily for the remote server where
@@ -51,7 +77,12 @@ up front.
 
 ---
 
-## Decision 003 — Offline-first core operation
+## Decision 003 — Offline-first core operation — CONFIRMED
+
+> Still in force (current Source of Truth §13: offline evaluation with
+> local data; external weather degrades gracefully). The rerouting
+> simulation uses only local data. "Phase 7" below refers to the old
+> roadmap; offline packaging is currently deferred.
 
 **Decision:** Core routing and algorithm-comparison functionality must
 not require continuous internet access. Normal route planning must work
@@ -69,7 +100,110 @@ Truth §34). The exact offline packaging mechanism is **not** decided here
 
 ---
 
-## Decisions explicitly NOT made in this loop
+## Decision 004 — Project direction: ML-assisted dynamic rerouting — CONFIRMED
+
+**Decision:** Nautilus is a weather-aware dynamic ship-rerouting system
+enhanced by ML. Priorities: rerouting functionality, ML integration (speed
+prediction; optional ML rerouting decisions), evaluation/demonstration,
+practical engineering (Source of Truth §18).
+
+**Source:** The user's rewrite of `docs/Source_Of_Truth.md`, present in
+the working tree at the start of Loop 003 and committed in `6fdfd91`
+(2026-10-03).
+
+**Implication:** RL remains out of scope (§8.4). Adding routing
+algorithms solely to increase their number is out of scope (§4). Work
+follows the §16 phase order.
+
+## Decision 005 — Rerouting reuses `Router.search` — CONFIRMED
+
+**Decision (Loop 003):** Rerouting from the current position is
+`Router.search(current_cell, destination_cell, ...)`; no new search
+function or algorithm. `search` raises `ValueError` for a start/goal
+outside the grid or on a non-navigable cell; `found=False` is reserved
+for "no navigable path".
+
+**Why (as recorded in Loop 003):** `search` already accepted any
+`(row, col)`. Without validation, a non-navigable start next to water
+returned a route starting on that cell, and a negative row index wrapped
+around and returned `found=True` — silent navigability violations.
+
+## Decision 006 — Compare routes by routing cost from one Router — CONFIRMED
+
+**Decision (Loops 003–004):** Route comparison uses the search objective:
+`RouteResult.cost` for a new route and `Router.path_cost(cells)` for an
+existing (remaining) path, both from the **same** `Router` instance.
+`time_hours` is not used for decisions.
+
+**Why:** `time_hours` is distance at a constant 18 kn and does not
+reflect the weather/ML cost the route was optimized for (Source of Truth
+§10). Cost units differ between cost models (km; km × wave multiplier;
+km at service speed with the ML model), so costs from different routers
+are not comparable.
+
+## Decision 007 — Threshold-based rerouting controller — CONFIRMED (baseline)
+
+**Decision (Loop 004):** `src/rerouting.RerouteController`, defaults in
+`config.REROUTE_*`:
+
+1. Score the remaining route under the latest weather.
+2. Triggers (any): max `swh` on remaining route ≥ 4.0 m; remaining cost
+   ≥ 5% above its cost under the weather it was planned with; periodic
+   re-check every 4 steps **only if weather or route changed** since the
+   last search.
+3. No search within a 3-step cooldown after a route change, or if
+   weather and route are unchanged since the last search.
+4. Reject failed searches or invalid candidates ("failed"; route kept).
+5. Adopt only if ≥ 3% **and** ≥ 20 cost units cheaper.
+
+**Why (as recorded in Loop 004):** the periodic re-check was added
+because the other two triggers only react to the active route getting
+worse, so an alternative becoming cheaper (Source of Truth §9.1
+"improving along an alternative") was never noticed; restricting it to
+changed weather stopped it from re-firing every step. This is the
+transparent baseline that any ML decision model (Phase 5) must beat.
+
+## Decision 008 — Voyage simulation model — CONFIRMED (prototype)
+
+**Decision (Loop 004):**
+
+- Vessel position = index into the active route's cells; no lat/lon
+  snapping during a voyage. On adoption the new route starts at the
+  vessel's cell.
+- Weather updates = deterministic Gaussian perturbations of significant
+  wave height on an existing `Weather` (`src/weather_sim.py`); period and
+  direction unchanged.
+- One `Router` (cost model) is built per weather update; in the
+  simulation the ML speed-based multiplier is the default cost model.
+
+## Decision 009 — Test framework — CONFIRMED
+
+**Decision (Loop 003):** Tests use stdlib `unittest` in `tests/`, run with
+`python -m unittest discover -s tests`, using committed
+`data/processed/` artifacts. No pytest dependency was added (none existed
+and the brief said to avoid new dependencies).
+
+---
+
+## Unresolved choices
+
+- **Next goal:** Phase 3 (ETA/cost consistency + ML integration) is
+  proposed in `TASKS.md` but not confirmed by the user.
+- **ETA definition:** what `time_hours` should mean (ML-cost-derived hours
+  vs. constant speed) and whether Dijkstra results should report a
+  weather-aware ETA. Belongs to the next goal.
+- **A* heuristic:** whether to correct the latitude scaling (possible
+  overestimate north of ~13.5°N). See `BLOCKERS.md` C3.
+- **Rejected-alternative re-search:** the controller does not re-search
+  while weather and route are unchanged, even though a rejected
+  alternative's *relative* gain can grow as the voyage shortens. Kept for
+  now; revisit if Phase 4 evaluation shows missed reroutes.
+- **ML model artifact:** retrain under scikit-learn 1.9.0 or pin 1.8.0
+  (`BLOCKERS.md` C5).
+
+---
+
+## Decisions explicitly NOT made in Loop 000 (historical)
 
 - No final set of routing algorithms beyond what already exists.
 - No recommendation-scoring formula or metric weighting.

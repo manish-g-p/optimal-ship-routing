@@ -1,8 +1,21 @@
 # Experiments
 
-Experiment records, in the format defined by `docs/Source_Of_Truth.md`
-§24: Experiment ID, Scenario, Start, Destination, Vessel, Weather,
-Algorithms tested, Constraints, Metrics, Results, Observations, Conclusion.
+Evidence and findings. Each record separates **measured results** (actually
+run, with the loop that ran them) from expectations and plans. Planned
+experiments are listed at the end and have **no results**.
+
+| ID | Topic | Status |
+| --- | --- | --- |
+| Baseline | `evaluation.csv`, 5 voyages, Dijkstra vs. A*+ML | Pre-existing; reproduced in Loops 001–004 |
+| EXP-001 | Containerized execution | Complete (Loop 001) |
+| EXP-002 | Current-position rerouting | Complete (Loop 003) |
+| EXP-003 | Weather-driven dynamic rerouting scenarios | Complete (Loop 004; re-run Loop 005) |
+
+The field list used for EXP-001 (Scenario, Start, Destination, Vessel,
+Weather, Algorithms, Constraints, Metrics, Results, Observations,
+Conclusion) came from the **previous** Source of Truth §24. The current
+Source of Truth's evaluation guidance is §11 (baselines, metrics,
+scenario-based testing).
 
 ---
 
@@ -144,3 +157,100 @@ confirming TASK-001's completion criteria. The one genuine gap found
 re-verified; the two other findings (sklearn skew, local API key) are
 pre-existing and orthogonal to containerization, and are recorded rather
 than fixed here to avoid scope creep into ML/routing work.
+
+---
+
+## EXP-002 — Current-position rerouting
+
+**Status:** Complete. Loop 003, 2026-10-03 (code committed in `6fdfd91`).
+
+**Purpose:** Check that the existing engine can route from an arbitrary
+intermediate cell to the original destination, and find gaps.
+
+**Setup:** Mumbai (JNPT) → Chennai, `rough` weather, General Cargo. Dijkstra
+(`Router(grid)`) and A* with the ML multiplier (`Router(grid, weather,
+mult_dir)`). Reroute from the midpoint cell of each full route.
+
+**Measured (exploratory probe before any code change):**
+
+| | Dijkstra | A* + ML |
+| --- | --- | --- |
+| Full route | 2953.6 km, 454 cells, path cost 2953.59 | 2954.9 km, 454 cells, path cost 3390.96 |
+| Remaining cost from midpoint (original route) | 1476.18 | 1624.01 |
+| Rerouted cost from midpoint | 1476.18 (identical) | 1624.01 (identical) |
+| Reroute starts at vessel / ends at destination | yes / yes | yes / yes |
+
+Edge-case behavior **before** the fix:
+
+| Start | Result |
+| --- | --- |
+| `(-1, 5)` (outside grid) | `found=True`, first cell `(-1, 5)` (negative-index wrap) |
+| `(nlat+3, 5)` | `IndexError` |
+| Land cell surrounded by land | `found=False` (silent) |
+| Non-navigable cell next to water | `found=True`, route **starts on the non-navigable cell** |
+| Non-navigable goal | `found=False` after expanding ~335k cells |
+
+**Conclusion:** Arbitrary-start routing already worked. The weather cost
+(3391 vs. 2955 km for A*) was not exposed, and invalid positions were
+silently accepted. Both were fixed (`RouteResult.cost`, `Router.path_cost`,
+`ValueError` validation). Validation: `VALIDATION.md` → Loop 003.
+
+---
+
+## EXP-003 — Weather-driven dynamic rerouting scenarios
+
+**Status:** Complete. Loop 004, 2026-10-03 (code committed in `e8f68d1`).
+Re-run in Loop 005 at `e8f68d1` (host and offline Docker): identical
+results.
+
+**Setup:** `python -m src.rerouting`. Cochin (Kerala) → Dubai / Jebel Ali,
+General Cargo (16 kn), base weather `typical`, A* with the ML speed
+multiplier, default `RerouteConfig`. Each scenario also runs with
+rerouting disabled (static voyage) under the same weather schedule.
+Hours = sailed cost ÷ (16 × 1.852 km/h): valid for the ML cost model
+only, and independent of `RouteResult.time_hours`.
+
+**Measured:**
+
+| Scenario | Weather change | Route changes | Static → dynamic (h) |
+| --- | --- | --- | --- |
+| stable | none | 0 | 100.9 → 100.9 |
+| adverse | +6 m storm (σ 120 km) on route midpoint at step 2 | 1 (step 2, 19.8% cheaper) | 127.7 → 103.3 |
+| worsening | same storm growing +1.5 / +3.5 / +6 m at steps 2/4/6 | 1 (step 4, 8.0%; step-8 re-check gain 0.3% kept) | 127.7 → 103.7 |
+| improving_alt | +6 m storm (σ 250 km) at departure clears at step 2 | 1 (step 4 periodic re-check, 6.1%) | 107.2 → 101.3 |
+| minor | +0.4 m (σ 25 km) at step 2 | 0 (re-check gain 0.0%) | 101.0 → 101.0 |
+| shifting | +6 m storm cycling route / ±1.5° lanes, steps 1–12 | 3 (steps 1, 5, 9); 5 evaluations blocked by cooldown | 118.2 → 106.6 |
+
+**Tuning observations (Loop 004, measured):**
+
+- First `improving_alt` design (calm patch off-route plus +2 m on-route)
+  fired no trigger. With a departure storm of σ 120 km, the detour cost
+  only ~1%, so the alternative (0.8% gain) was correctly rejected. Storm
+  width vs. adopted gain: σ 250 km → 6.1%, σ 350 km (+5 m) → 8.2%,
+  σ 400 km → 11.3%. σ 250 km was chosen.
+- `shifting` with cooldown 0: 12 route changes in steps 1–12 (thrashing).
+  With cooldown 6: 3 changes. Default cooldown 3 gives 3 changes.
+- The first periodic re-check implementation re-fired every step once
+  due. It was restricted to changed weather/route (Decision 007).
+
+**Observations:** Under these synthetic storms, dynamic rerouting saved
+6–24 simulated hours versus static routing and made no changes under
+stable or minor weather. These are model results on synthetic weather
+and synthetic-data ML speeds, **not** real-world performance (Source of
+Truth §11.4).
+
+---
+
+## Planned experiments (not run — no results)
+
+- **Static vs. dynamic across the fixed voyage set** (`evaluate.VOYAGES`)
+  and several vessel profiles, including `rough` base weather (Phase 4).
+  Should measure missed beneficial and unnecessary reroutes (Source of
+  Truth §11.2) and threshold sensitivity.
+- **ETA consistency check** once the next goal changes ETA: reported time
+  vs. ML-cost-derived time per route (Phase 3).
+- **A* heuristic admissibility** on northern east–west voyages, e.g.
+  Kandla ↔ Dubai: A* cost vs. weather-aware Dijkstra cost with the same
+  multiplier (BLOCKERS C3).
+- **ML rerouting-decision model vs. threshold baseline** on held-out
+  scenarios (Phase 5, optional).

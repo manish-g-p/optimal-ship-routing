@@ -4,6 +4,53 @@ Human-readable summary of what changed, loop by loop. Complements
 `LOOP_LOG.md` (which records process/decisions) by summarizing concrete
 file-level changes.
 
+Entries before 2026-10-03 were written under the previous Source of
+Truth; see `README.md` for how to read their "§" references.
+
+---
+
+## 2026-10-03 — Loop 005: documentation synchronization
+
+Documentation only; no code, tests, configuration or dependencies
+changed.
+
+- `docs/loop-engineering/`: `README.md` (navigation, reading order,
+  maintenance convention), `PROJECT_STATE.md` and `TASKS.md` rewritten
+  for the current state (previous versions in git at `79f130b`).
+  `BLOCKERS.md` restructured (C1–C8). `DECISIONS.md` gained 004–009, with
+  001 marked superseded. `EXPERIMENTS.md` gained EXP-002/003. Loop
+  003–005 records added to `LOOP_LOG.md` / `VALIDATION.md`.
+- `docs/Source_Of_Truth.md`: status line, §5.7 (implemented rerouting),
+  §14 maintenance pointer, §16 phase status markers.
+- `DOCKER.md`: removed references to the old Source of Truth's
+  production-image plan and "Phase 2"; added the offline test command.
+- `README.md`: rerouting added to the feature list.
+
+---
+
+## 2026-10-03 — Loop 004: weather-driven dynamic rerouting (`e8f68d1`)
+
+- **Added:** `src/weather_sim.py`, `src/rerouting.py`,
+  `tests/test_rerouting.py` (15 tests).
+- **Changed:** `config.py` (`REROUTE_*` defaults), `README.md` (rerouting
+  and tests sections), `docs/Source_Of_Truth.md` §15 (Dynamic Routing
+  limitations).
+- **Not changed:** `src/routing.py`, initial-route behavior,
+  `evaluation.csv`, UIs, dependencies.
+
+---
+
+## 2026-10-03 — Loop 003: current-position rerouting (`6fdfd91`)
+
+- **Changed:** `src/routing.py` — start/goal validation (`ValueError`),
+  `RouteResult.cost`, `Router.path_cost`. `README.md` — tests section.
+- **Added:** `tests/__init__.py`, `tests/test_routing.py` (8 tests).
+- **Same commit:** the user's rewrite of `docs/Source_Of_Truth.md`
+  (direction changed to ML-assisted dynamic rerouting; about 2,000 lines
+  replaced by about 780).
+- **Not changed:** search algorithm, route results for valid inputs
+  (`evaluation.csv` identical), UIs, dependencies.
+
 ---
 
 ## 2026-10-02 — Minor: organize Docker files into `docker/`

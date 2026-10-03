@@ -31,6 +31,9 @@ The default grid resolution is `0.05` degrees, approximately 5.5 km per cell.
 - Flask web application with Google Maps visualization.
 - Streamlit interface that does not require a Google Maps API key.
 - Evaluation of proposed and traditional routes.
+- Simulated dynamic rerouting: a vessel advances along its route, weather
+  changes, and a threshold-based controller reroutes from the current
+  position when the alternative is sufficiently better (console only).
 
 ## Requirements
 

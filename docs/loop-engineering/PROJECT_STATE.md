@@ -1,277 +1,160 @@
 # Project State
 
-**Last updated:** 2026-10-01 (Loop 002 — secret management, branch
-`refactor/docker-containerization`)
+**Last updated:** 2026-10-03 (Loop 005 — documentation synchronization)
+**Branch / commit verified:** `feature/dynamic-routing` @ `e8f68d1`
 
-This document is rebuilt/updated at the end of every loop. It describes what
-is actually true of the repository right now — not what is planned, and not
-what any other document claims. Where repository inspection and
-`docs/Source_Of_Truth.md` disagree, that is flagged explicitly below rather
-than silently resolved.
+What is actually true in the repository now — verified against the code
+and test runs, not taken from other documents. Project direction and
+scope are defined in [`docs/Source_Of_Truth.md`](../Source_Of_Truth.md).
+The previous version of this file (written for the pre-2026-10-03 Source
+of Truth) is in git at commit `79f130b`.
 
 ---
 
-## Current project
+## Project direction (from the Source of Truth)
 
-Nautilus is a weather-aware marine routing and decision-support system for
-waters around India (lat 0–27°N, lon 50–100°E, 0.05° grid ≈ 5.5 km/cell). It
-combines GEBCO bathymetry, ERA5 wave data, a navigable-ocean grid, Dijkstra
-and weather-aware A* search, and a machine-learning vessel-speed model. See
-[`docs/Source_Of_Truth.md`](../Source_Of_Truth.md) for the full target
-definition — multi-algorithm, scenario-based, evidence-driven comparison.
+Nautilus is an **ML-assisted dynamic ship-rerouting system** for the
+waters around India (0–27°N, 50–100°E, 0.05° grid ≈ 5.5 km/cell): route a
+voyage, track simulated progress, react to weather changes by
+recalculating from the vessel's current position, compare routes under
+consistent costs, and use the Random Forest speed model for weather-aware
+costs. Reinforcement learning and adding routing algorithms for their own
+sake are out of scope.
 
-## Current primary goals
+## Roadmap status (Source of Truth §16)
 
-- Multiple routing algorithms (currently: 2 implemented)
-- Scenario-based routing
-- Quantitative algorithm comparison
-- Evidence-based algorithm selection
-- Dockerized remote development
-- Offline-capable deployment
+| Phase | Status |
+| --- | --- |
+| 1 — Rerouting foundation | **Done**, except "verify ETA and cost consistency" (open, see Limitations) |
+| 2 — Weather updates and rerouting triggers | **Done (simulation only)** — Loop 004 |
+| 3 — ML speed prediction integration | **Next, proposed** — not started, awaiting confirmation (see `TASKS.md`) |
+| 4 — Evaluation and visualization | Not started (a console scenario evaluation exists; no UI) |
+| 5 — Experimental ML rerouting decisions | Not started; optional |
 
-## Current repository state
+## Implemented and verified
 
-### Implemented and working
+**Data and grid (pre-existing)**
 
-- **Data pipeline** (`src/preprocess.py`): extracts the India region from
-  raw GEBCO/ERA5 NetCDF files, downsamples to the configured grid, writes
-  `bathymetry.npz`, `weather.npz`, `weather_grid.csv` to `data/processed/`.
-- **Navigable grid** (`src/grid.py`): builds a navigable-water mask from
-  bathymetry (min depth 10 m, coast buffer 22 km), connected-component
-  analysis to keep the main ocean basin, KD-tree nearest-cell lookup.
-  Cached as `data/processed/grid.npz`.
-- **Weather layer** (`src/weather.py`): resamples wave fields (`swh`,
-  `mwp`, `mwd`) onto the routing grid for `typical` and `rough` static
-  scenarios; computes an explainable wave-cost multiplier.
-- **ML speed model** (`src/ml_model.py`): a RandomForestRegressor trained
-  on a **synthetic, physics-inspired** dataset (not real AIS/telemetry data)
-  predicts attainable vessel speed given sea state and vessel. Used to
-  build a per-cell, per-direction cost multiplier for weather-aware A*.
-  Cached as `data/processed/speed_model.joblib`.
-- **Routing engine** (`src/routing.py`): two algorithms exist —
-  - `dijkstra`: shortest great-circle distance, 8-connected grid search.
-  - `astar`: same search with an admissible equirectangular heuristic,
-    weather/ML cost multiplier applied per edge.
-  Both share one `Router` class and return a `RouteResult` dataclass
-  (`algorithm`, `found`, `cells`, `latlon`, `distance_km`, `time_hours`,
-  `max_wave_m`, `mean_wave_m`, `expanded`).
-- **Vessel profiles** (`src/vessel.py`): 5 fixed vessel types with service
-  speed, length, draft, wave sensitivity. Not all properties are consumed
-  by routing today (e.g. length/draft do not currently affect the search).
-- **Ports** (`src/ports.py`): ~20 fixed India + nearby-foreign ports.
-- **Evaluation script** (`src/evaluate.py`): runs a hardcoded list of 5
-  voyages through both algorithms under the `rough` scenario, computes
-  route optimality, computational efficiency, safety compliance (min
-  coast distance), and adaptability (wave exposure) metrics, prints a
-  table, and writes `data/processed/evaluation.csv`. This file and its
-  output **already exist and are committed** — it is the "existing
-  five-voyage evaluation baseline" referenced throughout the Source of
-  Truth (§24–25).
-- **Two UIs**: a Flask app (`server.py` + `web/`) with a Google-Maps
-  frontend and a JSON API (`/api/meta`, `/api/weather`,
-  `/api/weather_image`, `/api/route`), and a Streamlit app (`app.py`)
-  that needs no API key. Both call the same `src/` routing code.
-- **Pipeline runner** (`run_all.py`): preprocess (if needed) → train ML
-  model (if needed) → run `evaluate.run(scenario="rough", ...)`.
-- **Processed data is committed to git.** Despite `.gitignore` listing
-  `data/processed/`, the six files under `data/processed/` (including
-  `evaluation.csv` and `speed_model.joblib`) are tracked in the repo
-  (force-added). A fresh clone can run routing/evaluation **without**
-  the two raw NetCDF files, which are correctly excluded by `.gitignore`
-  (`*.nc`) and are present locally but not tracked (7.4 GB GEBCO, 4.1 GB
-  ERA5 wave).
+- `src/preprocess.py`: raw GEBCO/ERA5 NetCDF → `data/processed/`
+  (`bathymetry.npz`, `weather.npz`, `weather_grid.csv`). Raw `.nc` files
+  are not tracked and are not needed when `data/processed/` is present.
+- `src/grid.py`: navigable mask (depth ≥ 10 m, ≥ 22 km from barrier),
+  main-basin restriction for port snapping, KD-tree `nearest_cell`.
+- `data/processed/*` is git-tracked (force-added despite `.gitignore`).
 
-### Partially implemented
+**Weather (pre-existing)** — `src/weather.py`: `typical`/`rough` static
+scenarios resampled onto the grid (`swh`, `mwp`, `mwd`); analytic wave
+multiplier. `src/live_weather.py`: optional Open-Meteo source used by the
+Flask app's `live` scenario (not used by rerouting).
 
-- **Common `RouteResult`.** A `RouteResult` dataclass already exists in
-  `src/routing.py`, but it does not yet carry every field the Source of
-  Truth's standard result calls for (§13) — e.g. no explicit `runtime`,
-  `safety_validity`, `constraint_violations`, or `min_coast_clearance`
-  fields on the object itself (min-coast is computed separately, in
-  `evaluate.py`, by indexing a grid field with the route's cells).
-- **ETA correctness.** `docs/Source_Of_Truth.md` §25–26 states that the
-  ETA implementation was previously constant-speed, was identified as
-  incorrect, and was **subsequently corrected to use the accumulated
-  routing cost**. Repository inspection on this branch does not support
-  that claim: `Router._finalize` in `src/routing.py` currently computes
-  `time_hours = distance_km / (SHIP_SPEED_KN * 1.852)` — a constant-speed
-  calculation identical in form for both Dijkstra and A*, independent of
-  the weather/ML cost actually used to select the A* route. This is
-  flagged as an **open discrepancy between the Source of Truth narrative
-  and the actual code on this branch**, not asserted as fixed. See
-  [`BLOCKERS.md`](BLOCKERS.md). No source code was changed to investigate
-  or fix this during initialization, per task scope.
-- **Safety validation.** Minimum coast-distance is computed and reported
-  in `evaluate.py`, but there is no general constraint-checking/validity
-  flag attached to a route result, and no scenario-defined constraint
-  framework yet.
+**ML speed model (pre-existing)** — `src/ml_model.py`: RandomForest
+predicting attainable speed from sea state and vessel, trained on
+**synthetic** physics-inspired data. `build_multiplier_grid` turns it into
+a per-cell, per-direction cost multiplier (`service_speed / predicted`),
+used by weather-aware A* in `evaluate.py`, `server.py` and the rerouting
+simulation.
 
-### Implemented and working (added by Loop 001 — TASK-001)
+**Routing** — `src/routing.py`:
 
-- **Docker development environment.** `docker/Dockerfile` (python:3.12-slim
-  base, pinned dependencies) and an optional `docker/docker-compose.yml` for
-  bind-mounted local dev, both relocated into `docker/` in a later minor
-  reorg (current locations — originally at the repo root when Loop 001
-  created them). `.dockerignore` stays at the repo root deliberately (see
-  `DOCKER.md` for why). Full details, exact commands, and what was verified
-  vs. assumed are in `DOCKER.md` at the repo root — not duplicated here.
-  (Loop 001 originally had the Dockerfile generate a secret-free
-  `web_config.py` stand-in at build time; **superseded by Loop 002** below —
-  `web_config.py` no longer exists at all, so there's nothing to generate.)
-- **Pinned dependencies.** `requirements.txt` now pins all direct
-  dependencies to the exact versions already verified working on the host
-  `.venv` (resolves the "Unpinned dependency versions" unknown previously
-  listed below). No package was added, removed, or upgraded beyond what
-  Loop 002 added (`python-dotenv`, see below).
-- Verified, with real `docker build`/`docker run`/`docker compose` against
-  a live Docker engine (including multiple full `--no-cache` rebuilds from
-  zero cached layers, across both loops): the image builds reproducibly,
-  all dependencies import with `--network none`, and `python -m
-  src.evaluate` / `python run_all.py` run fully offline and reproduce the
-  committed `data/processed/evaluation.csv` exactly except for wall-clock
-  timing columns.
-- Fixed `server.py`'s Flask binding to be env-configurable (default
-  unchanged at `"127.0.0.1"`) instead of a hardcoded `"127.0.0.1"`, so the
-  Flask UI is reachable from outside its container via `docker run -p`
-  (verified broken before, working after). The Docker image sets
-  `HOST=0.0.0.0`; bare-metal runs are unaffected. (Originally read via the
-  now-removed `WC.HOST`; reads `C.HOST` from `config.py` as of Loop 002.)
+- `Router.search(start, goal, use_weather, use_heuristic)`: Dijkstra
+  (distance) or weather-aware A* on the 8-connected grid. Accepts **any
+  navigable `(row, col)` start**, which is how rerouting from the current
+  position works.
+- Invalid start/goal (outside grid or non-navigable) raises `ValueError`;
+  `found=False` means no navigable path (Loop 003).
+- `RouteResult`: `algorithm, found, cells, latlon, distance_km,
+  time_hours, max_wave_m, mean_wave_m, expanded, cost`. `cost` is the
+  accumulated search cost (Loop 003).
+- `Router.path_cost(cells, use_weather)`: scores any path with the same
+  step costs as the search (Loop 003).
 
-### Implemented and working (added by Loop 002 — secret management)
+**Dynamic rerouting (simulation)** — Loop 004:
 
-- **Single configuration module.** `config.py` is now the only
-  configuration module in the application. It loads a local `.env` (via
-  `python-dotenv`, pinned `python-dotenv==1.2.4`) if one exists, then reads
-  `GOOGLE_MAPS_API_KEY`, `PORT`, and `HOST` from the environment — exactly
-  the settings `web_config.py` used to hold, plus every routing/data
-  setting already there. `web_config.py` has been deleted
-  (`git rm -f`) and no longer exists.
-- **No hardcoded secrets remain in source.** A repo-wide search (secret-
-  pattern keywords, long opaque-string scan, AWS-key patterns, DB
-  connection-string patterns) found exactly one genuine secret in the
-  whole repository: the Google Maps API key. It is the only one that
-  existed, and it is now sourced from the environment, never hardcoded.
-  See `DOCKER.md` → "Secret management" for the full write-up and
-  `BLOCKERS.md` Q7 for how the pre-existing local key value was handled.
-- **`.env` / `.env.example`.** `.env` holds real local values (gitignored,
-  never committed, excluded from the Docker build context).
-  `.env.example` documents every variable with safe placeholders and is
-  committed. Deliberately contains only `GOOGLE_MAPS_API_KEY` — `PORT` and
-  `HOST` are ordinary deployment config, not secrets, and were kept out of
-  the template after a real bug was found and fixed during this loop (see
-  below).
-- **Missing-key handling.** `server.py` logs one clear, non-fatal
-  console warning at startup when `GOOGLE_MAPS_API_KEY` is unset
-  (`"GOOGLE_MAPS_API_KEY is not set - the map will not load..."`), never
-  the key value itself. The app still starts and every non-map feature
-  (JSON API, routing, Streamlit) works with no key configured — verified,
-  not assumed.
-- **Docker compatibility verified**, including a bug found and fixed in
-  this loop: an earlier draft of `.env`/`.env.example` included `PORT`
-  and `HOST` alongside the real secret. Loading that `.env` via `docker
-  run --env-file` silently overrode the Dockerfile's `ENV HOST=0.0.0.0`
-  back to `127.0.0.1`, breaking container reachability again (the exact
-  problem Loop 001 had fixed). Caught by actually testing the
-  `--env-file` path, not just reading the diff. Fixed by removing
-  `PORT`/`HOST` from the `.env` template (they're not secrets and don't
-  belong there) and, as a second safety net, pinning `HOST=0.0.0.0`
-  explicitly in `docker-compose.yml`'s `nautilus-flask` service so it
-  wins over `env_file` even if someone re-adds `HOST` to their own `.env`.
+- `src/weather_sim.py`: deterministic weather updates as Gaussian
+  wave-height perturbations of an existing `Weather`; named scenarios
+  `stable, adverse, worsening, improving_alt, minor, shifting`.
+- `src/rerouting.py`: `RerouteConfig`, `RerouteController`, `simulate()`,
+  `VoyageResult`, `router_factory()`, and a console scenario evaluation
+  (`python -m src.rerouting`). Vessel position is an index into the
+  active route's cells; each weather update rebuilds the cost model;
+  every evaluation is logged as a `RerouteEvent` (triggers, decision,
+  reason, costs). Decision rules and defaults: see `DECISIONS.md` D007
+  and the `REROUTE_*` settings in `config.py`.
 
-### Planned (not yet started)
+**Evaluation (pre-existing)** — `src/evaluate.py`: 5 fixed voyages,
+Dijkstra vs. A*+ML under `rough` weather, writes
+`data/processed/evaluation.csv` (committed baseline, unchanged by Loops
+003–004).
 
-- Docker Hub image build/publish workflow; remote-server pull/run
-  (TASK-002/003/004 — explicitly deferred, see `TASKS.md`).
-- Common routing-algorithm interface (`RoutingProblem` → `RoutingAlgorithm`
-  → `RouteResult`) decoupled from the two existing hardcoded functions.
-- Additional algorithms: Bidirectional Dijkstra, Bidirectional A*,
-  weather-aware Dijkstra (a weather-aware algorithm that is *not*
-  heuristic-guided — today only the heuristic-guided A* is weather-aware),
-  risk-constrained/multi-objective routing.
-- Scenario framework (reusable scenario definitions beyond the two
-  hardcoded weather scenarios and the hardcoded voyage list in
-  `evaluate.py`).
-- Automated evaluation engine (scenario → run algorithms → metrics →
-  constraints → feasibility → comparison → evidence), generalized beyond
-  the current single hardcoded script.
-- Evidence-based recommendation engine.
-- Algorithm-comparison UI (current UI shows one route per request type;
-  it does not yet expose multi-algorithm comparison or recommendation
-  evidence).
-- Offline packaging/distribution mechanism.
+**Interfaces (pre-existing)** — Flask (`server.py` + `web/`, Google Maps,
+JSON API) and Streamlit (`app.py`). Neither exposes rerouting yet.
 
-### Unknowns requiring investigation
+**Infrastructure (pre-existing)** — `docker/Dockerfile`,
+`docker/docker-compose.yml`, root `.dockerignore`, `DOCKER.md`; pinned
+`requirements.txt`; `config.py` as the single configuration module,
+secrets from `.env` (template `.env.example`). Offline: evaluation, tests
+and the rerouting simulation run with `--network none` (verified, see
+`VALIDATION.md`).
 
-- ~~**Dependency versions.**~~ **Resolved by Loop 001.** `requirements.txt`
-  is now pinned to the exact versions verified working both on the host
-  `.venv` and inside the Docker image.
-- ~~**Host-level system dependencies**~~ **Resolved by Loop 001.**
-  Verified: `netCDF4`, `xarray`, `scipy`, `scikit-learn`, and every other
-  pinned dependency install cleanly as manylinux wheels on a plain
-  `python:3.12-slim` base image — no extra `apt` packages were needed.
-- **New: scikit-learn version skew in the shipped ML model artifact.**
-  `data/processed/speed_model.joblib` was pickled under scikit-learn
-  1.8.0; the host `.venv` (and now the pinned `requirements.txt`) has
-  1.9.0. Loading it prints an `InconsistentVersionWarning`. Investigated
-  in Loop 001: container output was diffed byte-for-byte against the
-  host-committed `evaluation.csv` and found identical on every column
-  except wall-clock runtime, so this has not changed behavior today —
-  but it is a real, pre-existing fragility (not introduced by
-  containerization) worth resolving in Phase 2 by either retraining the
-  model under 1.9.0 or pinning scikit-learn to 1.8.0. See `BLOCKERS.md`
-  and `DOCKER.md`.
-- ~~**A real-looking Google Maps API key as a local, uncommitted default
-  in `web_config.py`.**~~ **Migrated by Loop 002**, not fully resolved.
-  Found during Loop 001; confirmed never committed/pushed anywhere. Loop
-  002 moved that local value into `.env` (gitignored) and deleted
-  `web_config.py`. Still open: whether the key is real/live and whether
-  it needs rotation is a human decision neither loop made. See
-  `BLOCKERS.md` Q7 and `DOCKER.md` → "Secret management".
-- **No automated tests exist in the repository** (no `test_*.py`,
-  `tests/`, or test runner configuration were found). "Validation" today
-  means manually running `run_all.py` / `src/evaluate.py` and inspecting
-  output. This has no bearing on the current direction (not an RL
-  artifact) but is a real gap worth noting for Phase 2/3 work.
-- **`tools/generate_demo_guide.py`** exists but was not inspected in
-  detail; purpose inferred from filename (generates `docs/*Demo_Guide*`
-  materials) and is not part of the routing/evaluation runtime path.
-- **Deployment assumptions.** Nothing in the repo currently assumes a
-  specific deployment target beyond "run locally with `.venv`"; there is
-  no existing Docker, systemd, or cloud-deployment configuration to
-  reconcile with the new containerization work.
+**Tests** — `tests/` (stdlib `unittest`, committed data, no network):
+`test_routing.py` (8 tests: initial-route regression, cost, rerouting
+from intermediate/off-route positions, invalid positions) and
+`test_rerouting.py` (15 tests: scenarios A–E). 23 tests pass at
+`e8f68d1` (re-run in Loop 005).
 
-## Entry points (as they exist today)
+## Planned (not implemented)
+
+- Phase 3: consistent ML-based travel time (ETA aligned with routing
+  cost), behavior across vessel profiles. The ML model is already used
+  in costs; ETA is not.
+- Phase 4: static-vs-dynamic evaluation across the fixed voyage set and
+  vessels; rerouting visualization in the existing UI.
+- Phase 5 (optional): ML rerouting-decision experiment vs. the
+  threshold baseline.
+
+## Deferred / superseded (from the previous Source of Truth)
+
+Docker Hub publishing and remote-server deployment (old TASK-002–004),
+additional routing algorithms, a generic scenario/evidence/recommendation
+framework, an algorithm-comparison UI, and offline packaging are **not**
+in the current roadmap. See `TASKS.md` → Historical tasks.
+
+## Known limitations (details in `BLOCKERS.md`)
+
+- `RouteResult.time_hours` = distance ÷ constant 18 kn
+  (`config.SHIP_SPEED_KN`), ignoring weather and vessel. Rerouting
+  decisions use `cost`, not `time_hours`.
+- `cost` units depend on the cost model; compare costs only from the
+  same `Router`.
+- A* heuristic may overestimate east–west distance north of ~13.5°N
+  (up to ~9% at 27°N); its docstring calls it admissible.
+- Rerouting is simulation-only: synthetic `swh`-only perturbations,
+  movement in fixed cells per step (not time-based), thresholds and
+  scenarios tuned on one voyage (Cochin → Dubai, General Cargo).
+- ML model is trained on synthetic data; pickle written with
+  scikit-learn 1.8.0 and loaded under 1.9.0 (warning, no observed effect).
+
+## Entry points
 
 | Command | What it does |
 | --- | --- |
-| `python -m src.preprocess` | One-time: raw NetCDF → `data/processed/*.npz`, `*.csv` (requires the two raw `.nc` files locally; **not required** if `data/processed/` is already populated, which it is on this branch). |
+| `python -m src.preprocess` | Raw NetCDF → `data/processed/` (needs the raw `.nc` files). |
+| `python -m src.grid` | (Re)builds `grid.npz`. |
 | `python -m src.ml_model` | Trains/saves `speed_model.joblib`. |
-| `python -m src.grid` | (Re)builds `grid.npz` from `bathymetry.npz`. |
-| `python -m src.evaluate` | Runs the 5-voyage Dijkstra-vs-A* evaluation, writes `data/processed/evaluation.csv`. |
-| `python run_all.py` | preprocess (if needed) → train model (if needed) → evaluate. |
-| `python server.py` | Flask + Google Maps UI on port 8000 (`GOOGLE_MAPS_API_KEY` optional — set via `.env` or the environment; everything but map tiles works without it). |
-| `streamlit run app.py` | Streamlit UI on port 8501, no API key required. |
+| `python -m src.evaluate` | 5-voyage Dijkstra vs. A*+ML evaluation → `evaluation.csv`. |
+| `python run_all.py` | preprocess (if needed) → train (if needed) → evaluate. |
+| `python -m src.rerouting` | Dynamic-rerouting scenarios, dynamic vs. static voyage. |
+| `python -m unittest discover -s tests -v` | Test suite (~45 s). |
+| `python server.py` | Flask UI/API on port 8000 (Maps key optional, via `.env`). |
+| `streamlit run app.py` | Streamlit UI on port 8501. |
 
-## Running in Docker
+All of these also run in the `nautilus-dev` Docker image; see `DOCKER.md`.
 
-As of Loop 001, all entry points above also run inside the
-`nautilus-dev` Docker image without any host Python installation — see
-`DOCKER.md` for exact commands and what was verified. As of Loop 002,
-pass `--env-file .env` (or `-e GOOGLE_MAPS_API_KEY=...`) to `docker run`
-to supply the Maps key; `docker compose` picks up `.env` automatically.
+## Configuration (`config.py`)
 
-## Dependencies (from `requirements.txt`, pinned as of Loop 001/002)
-
-numpy, scipy, xarray, netCDF4, dask, networkx, scikit-learn, joblib,
-pandas, matplotlib, requests, flask, flask-cors, python-dotenv,
-streamlit, folium, streamlit-folium.
-
-`networkx` is listed but was not seen imported by any file inspected so
-far — unconfirmed whether it is actually used.
-
-## Geographic / modeling configuration (`config.py`)
-
-Region 0–27°N, 50–100°E · grid 0.05° · min depth 10 m · coast buffer 22 km ·
-nominal ship speed 18 kn · wave-cost weights `W_WAVE_HEIGHT=0.6`,
-`W_HEAD_SEAS=0.4`, `W_PERIOD=0.1` · `MAX_WEATHER_MULT=4.0`. These are
-project modeling assumptions, not maritime regulations (Source of Truth §6).
+Region 0–27°N, 50–100°E · grid 0.05° · min depth 10 m · coast buffer
+22 km · nominal speed 18 kn · wave weights `W_WAVE_HEIGHT=0.6`,
+`W_HEAD_SEAS=0.4`, `W_PERIOD=0.1` · `MAX_WEATHER_MULT=4.0` · rerouting
+defaults `REROUTE_*` (cells/step 10, eval interval 1, cooldown 3, wave
+trigger 4.0 m, cost trigger 5%, periodic re-check 4 steps, min gain 3% and
+20 cost units). These are modeling assumptions, not maritime rules.
