@@ -73,6 +73,11 @@ class StableWeatherTests(VoyageChecks):           # Scenario A
         self.assertNoReroute(res)
         self.assertEqual({e.decision for e in res.events}, {"no_trigger"})
         self.assertAlmostEqual(res.sailed_cost, initial.cost, delta=1e-6 * initial.cost)
+        # sailed time = the initial route's ML travel time; km = its length
+        self.assertAlmostEqual(res.sailed_hours, make(base).path_hours(initial.cells),
+                               places=6)
+        self.assertEqual(round(res.sailed_hours, 1), initial.time_hours)
+        self.assertAlmostEqual(res.sailed_km, initial.distance_km, delta=0.05)
 
     def test_vessel_progress(self):
         cfg = RR.RerouteConfig()
@@ -117,6 +122,14 @@ class AdverseWeatherTests(VoyageChecks):          # Scenario B
         self.assertAlmostEqual(ev.alternative_cost, res.active_route.cost, places=6)
         self.assertAlmostEqual(ev.alternative_cost,
                                storm_router.path_cost(res.active_route.cells, True), places=6)
+        # reported hours come from the same router as the compared costs
+        self.assertAlmostEqual(ev.remaining_hours,
+                               storm_router.path_hours(initial.cells[i:]), places=6)
+        self.assertAlmostEqual(ev.alternative_hours,
+                               storm_router.path_hours(res.active_route.cells), places=6)
+        kmh = V.get("General Cargo").service_speed_kn * 1.852   # ML: cost ~ time
+        self.assertAlmostEqual(ev.remaining_hours, ev.remaining_cost / kmh, places=6)
+        self.assertAlmostEqual(res.sailed_hours, res.sailed_cost / kmh, places=6)
         self.assertGreaterEqual(ev.gain_rel, cfg.min_gain)
         # after adoption the vessel follows the new route
         self.assertEqual(res.track[i:], [tuple(c) for c in res.active_route.cells])
@@ -126,6 +139,21 @@ class AdverseWeatherTests(VoyageChecks):          # Scenario B
         sta = run("adverse", RR.RerouteConfig(enabled=False))
         self.assertNoReroute(sta)
         self.assertLess(dyn.sailed_cost, sta.sailed_cost)
+        self.assertLess(dyn.sailed_hours, sta.sailed_hours)     # same semantics
+
+    def test_decisions_ignore_travel_time_model(self):
+        # An absurd time model (1 kn, no weather) must not change anything
+        # the controller decides - decisions use routing cost only.
+        def odd_time(weather):
+            router = copy.copy(make(weather))
+            router.speed_kn, router.time_mult = 1.0, None
+            return router
+        normal = run("adverse")
+        odd = run("adverse", make_router=odd_time)
+        self.assertEqual([(e.step, e.decision, e.alternative_cost) for e in odd.events],
+                         [(e.step, e.decision, e.alternative_cost) for e in normal.events])
+        self.assertEqual(odd.track, normal.track)
+        self.assertNotAlmostEqual(odd.sailed_hours, normal.sailed_hours, places=0)
 
     def test_alternative_below_threshold_is_not_adopted(self):
         res = run("adverse", RR.RerouteConfig(min_gain=0.5))

@@ -1,6 +1,6 @@
 # Blockers and Open Concerns
 
-**Last reviewed:** 2026-10-03 (Loop 006), working tree on top of `095bd0b`.
+**Last reviewed:** 2026-10-03 (Loop 007), working tree on top of `1fd131d`.
 
 - **Blocker:** prevents the current/next goal from being done or validated.
 - **Open concern:** a known correctness issue, risk or limitation that
@@ -17,17 +17,12 @@ None. The proposed next goal (`TASKS.md`) only needs user confirmation.
 
 ## Open concerns
 
-### C1 — ETA is not derived from the routing cost (correctness issue)
+### C1 — ETA not derived from the routing cost — RESOLVED (Loop 007)
 
-`Router._finalize` sets `time_hours = distance_km / (SHIP_SPEED_KN × 1.852)`
-with `SHIP_SPEED_KN = 18` (`src/routing.py`, `config.py`). It ignores
-weather, the ML speed model and the vessel's service speed, so A* routes
-chosen for travel time report constant-speed ETAs. Source of Truth §10
-treats this as a correctness issue. **Does not block rerouting**:
-decisions use `cost` (Decision 006). It is the core of the proposed next
-goal. (Formerly Q2, which described the same code against a previous
-Source of Truth claim that the ETA had been fixed. That claim no longer
-exists; the code is unchanged.)
+Was: `time_hours = distance ÷ 18 kn` for every route. Now travel time comes
+from the vessel's ML speed model per segment (Source of Truth §10.1,
+Decision 011). It is tested against an independent per-segment
+calculation. Kept here because older records refer to C1.
 
 ### C2 — Cost units depend on the cost model
 
@@ -35,7 +30,9 @@ exists; the code is unchanged.)
 wave multiplier (`Router(grid, weather)`), or km at service speed (ML
 multiplier; ÷ (service kn × 1.852) gives hours). Comparing costs from
 different routers is meaningless. The rerouting controller always uses
-one router per comparison. Risk for future evaluation code.
+one router per comparison. For cross-route comparison, use `time_hours`
+(one time model for all routes since Loop 007) or `distance_km`. Risk for
+future evaluation code.
 
 ### C3 — A* heuristic may not be admissible (unverified impact)
 
@@ -116,7 +113,7 @@ fixed: unrelated to rerouting.
 | Item | Status |
 | --- | --- |
 | Q1 — Unpinned dependency versions | Resolved in Loop 001 (pinned `requirements.txt`). |
-| Q2 — ETA discrepancy vs. previous Source of Truth claim | Reframed as **C1** (the claim is gone; the issue remains). |
+| Q2 — ETA discrepancy vs. previous Source of Truth claim | Reframed as **C1**; **resolved in Loop 007**. |
 | Q3 — Container base-image system dependencies | Resolved in Loop 001 (plain `python:3.12-slim` suffices). |
 | Q4 — `networkx` usage | Still open as **C7**. |
 | Q5 — Remote server specifics (OS, Docker version, limits) | **Deferred**: remote deployment (old TASK-003/004) is not on the current roadmap. |

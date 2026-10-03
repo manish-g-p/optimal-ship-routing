@@ -168,6 +168,13 @@ The command preprocesses raw data when processed files are missing, trains the
 speed model when needed, and evaluates the rough-weather routes. Results are
 written to `data/processed/evaluation.csv`.
 
+Route metrics: `distance_km` is the path length; `cost` is the search objective
+(km for Dijkstra; km × weather multiplier for A*); `time_hours` is the
+estimated travel time from the ML speed model for the selected vessel and
+weather (`time_basis: "ml_speed"`). Dijkstra and A* routes use the same time
+model, so their hours are comparable. These are model estimates, not
+real-world arrival times. Definitions: `docs/Source_Of_Truth.md` §10.1.
+
 To retrain the speed model independently:
 
 ```bash

@@ -238,12 +238,11 @@ Confirmed (again, after this reorganization) to not change any output —
 diffed byte-for-byte against the baseline. Pre-existing, not introduced
 by Docker or this file move. See `docs/loop-engineering/BLOCKERS.md`.
 
-### ETA calculation (pre-existing, unrelated to this task)
+### ETA calculation — resolved (2026-10-03)
 
-`src/routing.py` computes ETA from distance at a constant speed rather
-than the accumulated weather-aware cost. Unaffected by this
-reorganization (no routing code was touched). Still open — see
-`docs/loop-engineering/BLOCKERS.md` C1.
+Formerly computed from distance at a constant 18 kn. Travel time now comes
+from the ML speed model (`docs/Source_Of_Truth.md` §10.1); verified in the
+container (`docs/loop-engineering/VALIDATION.md`, Loop 007).
 
 ### Production/offline-distribution image not yet built
 

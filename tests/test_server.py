@@ -45,9 +45,31 @@ class StaticEndpointTests(unittest.TestCase):
         d = r.get_json()
         self.assertEqual(d["dijkstra"]["distance_km"], 2953.6)
         self.assertEqual(d["astar"]["distance_km"], 2954.9)
+        # travel time from the ML speed model for both routes (Loop 007;
+        # previously distance / 18 kn = 88.6 h for both)
+        self.assertEqual(d["dijkstra"]["time_hours"], 114.5)
+        self.assertEqual(d["astar"]["time_hours"], 114.4)
+        self.assertEqual(d["astar"]["time_basis"], "ml_speed")
+        self.assertEqual(d["dijkstra"]["time_basis"], "ml_speed")
+        # same keys as before plus time_basis
         self.assertEqual(set(d["astar"]), {
-            "found", "path", "distance_km", "time_hours", "max_wave_m",
-            "mean_wave_m", "min_coast_km", "expanded", "waypoints"})
+            "found", "path", "distance_km", "time_hours", "time_basis",
+            "max_wave_m", "mean_wave_m", "min_coast_km", "expanded",
+            "waypoints"})
+
+    def test_route_time_without_ml_cost(self):
+        # A* on the analytic wave cost still reports ML-estimated time
+        d = client.post("/api/route", json={
+            "origin": "Mumbai (JNPT)", "dest": "Chennai (Tamil Nadu)",
+            "vessel": "General Cargo", "scenario": "rough", "use_ml": False,
+            "algorithms": ["astar"]}).get_json()
+        self.assertEqual(d["astar"]["time_basis"], "ml_speed")
+        self.assertNotIn("dijkstra", d)
+
+    def test_route_rejects_unknown_vessel(self):
+        r = client.post("/api/route", json={"origin": ORIGIN, "dest": DEST,
+                                            "vessel": "Submarine"})
+        self.assertEqual(r.status_code, 400)
 
     def test_route_rejects_same_port(self):
         r = client.post("/api/route", json={"origin": ORIGIN, "dest": ORIGIN})

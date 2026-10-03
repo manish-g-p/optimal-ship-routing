@@ -96,7 +96,8 @@ def result_json(weather, res):
         "found": True,
         "path": [[la, lo] for la, lo in res.latlon],
         "distance_km": res.distance_km,
-        "time_hours": res.time_hours,
+        "time_hours": res.time_hours,           # estimated travel time
+        "time_basis": res.time_basis,           # "ml_speed" | "calm_water"
         "max_wave_m": mx,
         "mean_wave_m": mean,
         "min_coast_km": min_coast,
@@ -199,6 +200,8 @@ def api_route():
         return jsonify({"error": "Origin and destination are the same."}), 400
     if origin not in P.PORTS or dest not in P.PORTS:
         return jsonify({"error": "Unknown port."}), 400
+    if vessel_name not in V.VESSELS:
+        return jsonify({"error": "Unknown vessel."}), 400
 
     try:
         weather = get_weather(scenario)
@@ -216,15 +219,18 @@ def api_route():
         "scenario": scenario, "vessel": vessel_name,
     }
 
+    # Travel time of every route is estimated with the ML speed model for
+    # this vessel and weather, whatever objective selected the route.
+    mult = get_multiplier(scenario, vessel_name, weather)
+    timing = {"speed_kn": V.get(vessel_name).service_speed_kn, "time_mult": mult}
     if "dijkstra" in algos:
-        rd = R.Router(GRID).search(start, goal, False, False)
+        rd = R.Router(GRID, **timing).search(start, goal, False, False)
         out["dijkstra"] = result_json(weather, rd)
     if "astar" in algos:
         if use_ml:
-            mult = get_multiplier(scenario, vessel_name, weather)
-            router = R.Router(GRID, weather=weather, mult_dir=mult)
+            router = R.Router(GRID, weather=weather, mult_dir=mult, **timing)
         else:
-            router = R.Router(GRID, weather=weather)
+            router = R.Router(GRID, weather=weather, **timing)
         ra = router.search(start, goal, True, True)
         out["astar"] = result_json(weather, ra)
 
@@ -247,15 +253,15 @@ def _latlon(cell):
     return list(GRID.cell_latlon(*cell))
 
 
-def _route_json(res, ves):
+def _route_json(res):
     return {"path": [[la, lo] for la, lo in res.latlon],
             "distance_km": res.distance_km,
             "cost": round(res.cost, 1),
-            "hours": round(RR.cost_hours(res.cost, ves), 1)}
+            "hours": res.time_hours}
 
 
-def _voyage_json(res, ves):
-    return {"hours": round(RR.cost_hours(res.sailed_cost, ves), 1),
+def _voyage_json(res):
+    return {"hours": round(res.sailed_hours, 1),
             "distance_km": round(res.sailed_km, 1),
             "cost": round(res.sailed_cost, 1),
             "reroutes": len(res.reroutes),
@@ -263,15 +269,15 @@ def _voyage_json(res, ves):
             "steps": res.steps, "arrived": res.arrived}
 
 
-def _event_json(e, ves):
-    def h(cost):
-        return None if cost is None else round(RR.cost_hours(cost, ves), 1)
+def _event_json(e):
+    def h(hours):
+        return None if hours is None else round(hours, 1)
     return {"step": e.step, "position": _latlon(e.cell),
             "decision": e.decision, "reason": e.reason,
             "triggers": list(e.triggers),
             "max_wave_m": round(e.max_swh_m, 2),
-            "remaining_hours": h(e.remaining_cost),
-            "alternative_hours": h(e.alternative_cost),
+            "remaining_hours": h(e.remaining_hours),
+            "alternative_hours": h(e.alternative_hours),
             "gain_pct": None if e.gain_rel is None else round(100 * e.gain_rel, 1)}
 
 
@@ -306,7 +312,6 @@ def api_simulate():
     except (ValueError, AttributeError) as e:
         return jsonify({"error": f"Invalid rerouting settings: {e}"}), 400
 
-    ves = V.get(vessel_name)
     base = get_weather(base_name)
     start = GRID.nearest_cell(*P.coord(origin))
     goal = GRID.nearest_cell(*P.coord(dest))
@@ -331,12 +336,12 @@ def api_simulate():
         "dest": {"name": dest, "lat": _latlon(goal)[0], "lon": _latlon(goal)[1]},
         "vessel": vessel_name, "base_weather": base_name, "scenario": scenario,
         "config": asdict(cfg),
-        "initial_route": _route_json(dyn.initial_route, ves),
-        "final_route": _route_json(dyn.active_route, ves),
+        "initial_route": _route_json(dyn.initial_route),
+        "final_route": _route_json(dyn.active_route),
         "track": [_latlon(c) for c in dyn.track],
-        "dynamic": _voyage_json(dyn, ves),
-        "static": _voyage_json(sta, ves),
-        "events": [_event_json(e, ves) for e in dyn.events
+        "dynamic": _voyage_json(dyn),
+        "static": _voyage_json(sta),
+        "events": [_event_json(e) for e in dyn.events
                    if e.decision != "no_trigger"],
         "departure_change": (_change_json(base, cmp.departure)
                              if cmp.departure is not base else None),

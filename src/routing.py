@@ -10,6 +10,20 @@ current position mid-voyage is just search(route.cells[i], route.cells[-1]).
 RouteResult.cost / Router.path_cost give the search objective so a new
 route and the remaining part of the active one can be compared fairly.
 
+Metrics of a route (all from the same cell path):
+  * distance_km : great-circle length of the path, km.
+  * cost        : the search objective - km (Dijkstra), km x analytic wave
+                  multiplier (a weighted penalty, NOT time), or km x ML
+                  multiplier (service speed / predicted speed). Only the
+                  ML cost is proportional to time: cost / (service kn x
+                  1.852) = hours. Compare costs only from the same Router.
+  * time_hours  : estimated travel time from the Router's time model,
+                  independent of which objective chose the path:
+                    "ml_speed"   - sum of segment km / ML-predicted speed
+                                   (time_mult = service / predicted speed)
+                    "calm_water" - km / speed_kn (no weather effect)
+                  It is an en-route estimate, not a real-world arrival time.
+
 Speed: a Router precomputes per-row step distances and per-cell weather
 multipliers once, so the search hot loop is just array look-ups. Both
 algorithms then finish in a fraction of a second on a laptop.
@@ -41,14 +55,25 @@ class RouteResult:
     expanded: int = 0                               # cells explored (cost proxy)
     cost: float = 0.0                               # accumulated search cost
                                                     # (km x weather multiplier)
+    time_basis: str = ""                            # "ml_speed" | "calm_water"
 
 
 class Router:
     """Holds the grid + precomputed costs and runs the searches."""
 
-    def __init__(self, grid, weather=None, mult_dir=None):
+    def __init__(self, grid, weather=None, mult_dir=None, speed_kn=None,
+                 time_mult=None):
         """mult_dir (nlat,nlon,8), if given, overrides the analytic weather
-        multiplier - used to plug in the ML speed-based cost."""
+        multiplier - used to plug in the ML speed-based cost.
+
+        Travel-time model (does not affect route search):
+          speed_kn  : vessel calm-water service speed (default
+                      config.SHIP_SPEED_KN).
+          time_mult : (nlat,nlon,8) service speed / predicted speed per move,
+                      i.e. ml_model.build_multiplier_grid for the same
+                      vessel. None -> calm-water time at speed_kn."""
+        self.speed_kn = float(speed_kn or C.SHIP_SPEED_KN)
+        self.time_mult = time_mult
         self.grid = grid
         self.weather = weather
         self.nlat, self.nlon = grid.nlat, grid.nlon
@@ -170,14 +195,26 @@ class Router:
         """Search cost of an existing path under this router's cost model -
         e.g. the remaining part of an active route, for comparison with a
         freshly computed alternative. Uses the same step costs as search()."""
-        mult_dir = self.mult_dir if use_weather else None
+        return self._path_sum(cells, self.mult_dir if use_weather else None)
+
+    def path_hours(self, cells):
+        """Estimated travel time (h) of a path under this router's time
+        model: each segment's km / its speed, summed (see module doc)."""
+        return self._path_sum(cells, self.time_mult) / (self.speed_kn * 1.852)
+
+    @property
+    def time_basis(self):
+        return "ml_speed" if self.time_mult is not None else "calm_water"
+
+    def _path_sum(self, cells, mult_dir):
+        """Sum of segment km, each times mult_dir[r, c, k] if given."""
         total = 0.0
         for (r, c), (nr, nc) in zip(cells, cells[1:]):
             k = _OFF.index((nr - r, nc - c))    # ValueError if not adjacent
-            cost = self.dist_dir[r, k]
+            step = self.dist_dir[r, k]
             if mult_dir is not None:
-                cost *= mult_dir[r, c, k]
-            total += cost
+                step *= mult_dir[r, c, k]
+            total += step
         return float(total)
 
     def _finalize(self, came, g_idx, use_weather, expanded, cost):
@@ -199,16 +236,16 @@ class Router:
         else:
             waves = [0.0]
 
-        speed_kmh = C.SHIP_SPEED_KN * 1.852
         return RouteResult(
             algorithm="A*" if use_weather else "Dijkstra",
             found=True, cells=path, latlon=latlon,
             distance_km=round(dist, 1),
-            time_hours=round(dist / speed_kmh, 1),
+            time_hours=round(self.path_hours(path), 1),
             max_wave_m=round(max(waves), 2),
             mean_wave_m=round(float(np.mean(waves)), 2),
             expanded=expanded,
             cost=float(cost),
+            time_basis=self.time_basis,
         )
 
 

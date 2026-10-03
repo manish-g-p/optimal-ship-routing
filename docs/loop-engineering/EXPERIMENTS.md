@@ -11,6 +11,7 @@ experiments are listed at the end and have **no results**.
 | EXP-002 | Current-position rerouting | Complete (Loop 003) |
 | EXP-003 | Weather-driven dynamic rerouting scenarios | Complete (Loop 004; re-run Loop 005) |
 | EXP-004 | Voyage simulation through the Flask API/UI | Complete (Loop 006) |
+| EXP-005 | Travel-time / ETA correction | Complete (Loop 007) |
 
 The field list used for EXP-001 (Scenario, Start, Destination, Vessel,
 Weather, Algorithms, Constraints, Metrics, Results, Observations,
@@ -265,6 +266,47 @@ cooldown 6, `shifting` gave the Container Ship only 1.1 h of benefit. That
 is not compared with the General Cargo figure in EXP-003, which used
 cooldown 3. Whether rerouting pays off depends on vessel and settings,
 which is what the planned multi-voyage evaluation should measure.
+
+---
+
+## EXP-005 — Travel-time / ETA correction
+
+**Status:** Complete. Loop 007, 2026-10-03.
+
+**Measured before the change** (exploratory script, `rough` weather):
+
+| Check | Result |
+| --- | --- |
+| ML multiplier at the 4× cap (cell-directions) | General Cargo: 0.50%; Container Ship: 0%; `typical`: 0% for both |
+| ML multiplier at 1.0 (speed ≥ service) | 0% in all four cases |
+| RF predicted speed, General Cargo, head seas, swh 0/4/8/12 m | 15.80 / 5.52 / 3.99 / 3.99 kn (service 16) |
+| Mumbai → Chennai, General Cargo: old `time_hours` | 88.6 h (both routes) |
+| … calm water at 16 kn | 99.7 h |
+| … ML speed model | Dijkstra 114.5 h, A* 114.4 h |
+
+**Evaluation (`python -m src.evaluate`, General Cargo, `rough`) — hours
+before → after.** All other non-timing columns are identical.
+
+| Voyage | Dijkstra h | A* h |
+| --- | --- | --- |
+| Mumbai → Chennai | 88.6 → 114.5 | 88.6 → 114.4 |
+| Kandla → Cochin | 53.4 → 70.9 | 53.4 → 70.9 |
+| Cochin → Dubai | 83.1 → 135.0 | 92.1 → 128.9 |
+| Visakhapatnam → Colombo | 50.9 → 68.6 | 51.0 → 68.6 |
+| Chennai → Port Blair | 48.4 → 68.7 | 48.6 → 66.6 |
+
+**Observations:**
+
+- The ML estimates are 29–62% higher than the old figures on these
+  voyages, i.e. the old figures were 23–38% too low.
+  They made A* look slower than Dijkstra on Cochin → Dubai (+9 h), when
+  under the time model it optimizes, it is 6.1 h faster. A* ≤ Dijkstra in
+  hours on all five voyages.
+- Flask route mode, Container Ship, `typical`, Cochin → Dubai: 71 h for
+  both routes (old 18 kn figure: 83 h), matching the simulation's 71.3 h
+  initial plan.
+- Simulation and rerouting results (EXP-003/004) are unchanged: for the
+  ML model the new hours equal the old cost-based conversion.
 
 ---
 

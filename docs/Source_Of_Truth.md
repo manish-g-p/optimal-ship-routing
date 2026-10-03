@@ -3,7 +3,7 @@
 **Project:** Nautilus
 **Category:** ML-Assisted Dynamic Ship Routing System
 **Primary Focus:** Weather-Aware Rerouting and Machine Learning
-**Status (2026-10-03):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented, and the simulation can be run and inspected in the Flask UI. Next: route cost/ETA consistency and ML speed integration (Phase 3, proposed). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
+**Status (2026-10-03):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented, and the simulation can be run and inspected in the Flask UI. Route cost, distance and travel time now have defined, tested semantics (§10.1). Next: to be decided (see `docs/loop-engineering/TASKS.md`). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
 
 ---
 
@@ -206,7 +206,8 @@ As of 2026-10-03:
 * **Current-position rerouting:** `Router.search` routes from any navigable grid cell; invalid or non-navigable start/goal cells raise an error; `RouteResult.cost` and `Router.path_cost` expose the routing cost for comparisons.
 * **Threshold-based dynamic rerouting (simulation):** `src/weather_sim.py` (deterministic simulated weather updates) and `src/rerouting.py` (vessel progress along the active route, remaining-route evaluation, configurable triggers, cooldown, improvement thresholds, rerouting event log). Defaults are the `REROUTE_*` settings in `config.py`. Run it with `python -m src.rerouting`.
 * **Flask UI integration:** "Voyage simulation" mode and `POST /api/simulate` run a voyage with and without rerouting. They show the initial plan, the sailed track, reroute points, weather changes, a progress slider, and each rerouting evaluation with its reason. The Streamlit app does not include it.
-* Not yet implemented: ETA derived from the routing cost (§10), static-vs-dynamic evaluation across the fixed voyage set and vessel profiles, and ML rerouting decisions (§8.2).
+* **Consistent travel time:** routes report travel time from the ML speed model for the selected vessel and weather, the same model the weather-aware cost uses (§10.1).
+* Not yet implemented: static-vs-dynamic evaluation across the fixed voyage set and vessel profiles, and ML rerouting decisions (§8.2).
 
 ---
 
@@ -489,6 +490,19 @@ Any discrepancy between accumulated routing cost and reported ETA should be trea
 
 The objective is not to build a perfect vessel performance model, but to make route comparisons internally consistent and meaningful.
 
+### 10.1 Implemented Metric Definitions (2026-10-03)
+
+| Metric | Unit | Definition |
+| --- | --- | --- |
+| Distance (`distance_km`) | km | Great-circle length of the route's cell path (sum of segment lengths). |
+| Route cost (`cost`) | depends on cost model | The search objective. Dijkstra: km. Weather-aware A* with the ML model: Σ segment km × (service speed ÷ ML-predicted speed), i.e. km-equivalent at service speed. A* with the analytic wave multiplier: a weighted penalty, **not** time. Costs are compared only within one cost model and weather state. |
+| Travel time (`time_hours`, "est. hours") | h | Σ segment km ÷ (segment speed × 1.852). Segment speed is the ML-predicted speed for the vessel, sea state and heading ("ml_speed" basis), bounded to [service ÷ 4, service]. Without an ML model it is the calm-water service speed ("calm_water" basis). A route reports its basis in `time_basis`. |
+
+* Travel time is a property of the path and the time model, not of the algorithm that chose the path. The Flask API, Streamlit app and evaluation estimate Dijkstra and A* routes with the same ML model, so their hours are comparable.
+* With the ML cost model, cost ÷ (service speed × 1.852) equals travel time exactly; this relation is tested.
+* In voyage simulation, voyage time is the sum over sailed legs of each leg's travel time under the weather in force when it was sailed. Rerouting decisions use cost only; reported hours never feed a decision.
+* "ETA" in Nautilus means estimated time en route from departure, in hours. It is a model estimate (synthetic-data speed model), not a predicted real-world arrival time.
+
 ---
 
 ## 11. Evaluation Strategy
@@ -657,8 +671,8 @@ The following limitations should be considered during implementation.
 
 * Current-position route generation is implemented and tested (`Router.search` from any navigable cell, `RouteResult.cost`, `Router.path_cost`).
 * A threshold-based rerouting loop runs in simulation only (`src/rerouting.py`, `src/weather_sim.py`, `python -m src.rerouting`): weather updates are synthetic wave-height perturbations, and vessel progress is a fixed number of grid cells per step, not time-based.
-* Rerouting decisions compare routing cost (km × weather/ML speed multiplier). The `time_hours` reported by `RouteResult` is still distance at a constant 18 kn and is not used for rerouting decisions.
-* Rerouting is not yet exposed in the Flask or Streamlit interfaces.
+* Rerouting decisions compare routing cost (km × weather/ML speed multiplier). Reported travel time follows §10.1 and is not used for decisions.
+* Rerouting is exposed in the Flask interface ("Voyage simulation" mode), not in Streamlit.
 
 ### Machine Learning
 
@@ -674,7 +688,7 @@ The following limitations should be considered during implementation.
 
 ### Route Evaluation
 
-* ETA and accumulated route costs have had consistency issues.
+* ETA and route cost were inconsistent until 2026-10-03 (constant 18 kn ETA); now defined in §10.1. Travel time is only as good as the synthetic-data speed model.
 * Dynamic and static routes must be compared under equivalent assumptions.
 * Simulation results may not reflect actual maritime operations.
 
@@ -690,7 +704,7 @@ Development should proceed in the following order.
 
 ### Phase 1 — Rerouting Foundation
 
-**Status:** Done (2026-10-03), except "Verify ETA and cost consistency", which moves to Phase 3.
+**Status:** Done (2026-10-03). "Verify ETA and cost consistency" was completed together with Phase 3's ETA alignment (§10.1).
 
 **Objective:** Make the existing routing engine capable of recalculating routes during a voyage.
 
@@ -722,7 +736,7 @@ Tasks:
 
 ### Phase 3 — ML Speed Prediction Integration
 
-**Status:** Next (proposed). The ML model already drives weather-aware routing costs; ETA is not yet aligned with it.
+**Status:** Mostly done (2026-10-03). The ML model drives weather-aware costs and all reported travel times. Behaviour across vessel profiles is tested, and the metric semantics are documented (§10.1). Open: retraining or re-pinning the model artifact (scikit-learn version mismatch).
 
 **Objective:** Use the existing ML model consistently across route planning and evaluation.
 

@@ -1,8 +1,8 @@
 # Project State
 
-**Last updated:** 2026-10-03 (Loop 006 — rerouting in the Flask UI)
+**Last updated:** 2026-10-03 (Loop 007 — route cost / travel time consistency)
 **Branch / commit verified:** `feature/dynamic-routing`, working tree on
-top of `095bd0b` (Loop 006 changes not yet committed when written)
+top of `1fd131d` (Loop 007 changes not yet committed when written)
 
 What is actually true in the repository now — verified against the code
 and test runs, not taken from other documents. Project direction and
@@ -26,9 +26,9 @@ sake are out of scope.
 
 | Phase | Status |
 | --- | --- |
-| 1 — Rerouting foundation | **Done**, except "verify ETA and cost consistency" (open, see Limitations) |
+| 1 — Rerouting foundation | **Done** (ETA/cost consistency completed in Loop 007) |
 | 2 — Weather updates and rerouting triggers | **Done (simulation only)** — Loop 004 |
-| 3 — ML speed prediction integration | **Next, proposed** — not started, awaiting confirmation (see `TASKS.md`) |
+| 3 — ML speed prediction integration | **Mostly done** (Loop 007) — ML speed drives costs and all travel times; model artifact skew (C5) open |
 | 4 — Evaluation and visualization | **Partly done** — simulation viewable in the Flask UI (Loop 006); multi-voyage/vessel static-vs-dynamic evaluation not done |
 | 5 — Experimental ML rerouting decisions | Not started; optional |
 
@@ -64,10 +64,18 @@ simulation.
 - Invalid start/goal (outside grid or non-navigable) raises `ValueError`;
   `found=False` means no navigable path (Loop 003).
 - `RouteResult`: `algorithm, found, cells, latlon, distance_km,
-  time_hours, max_wave_m, mean_wave_m, expanded, cost`. `cost` is the
-  accumulated search cost (Loop 003).
+  time_hours, max_wave_m, mean_wave_m, expanded, cost, time_basis`.
+  `cost` is the accumulated search cost (Loop 003).
 - `Router.path_cost(cells, use_weather)`: scores any path with the same
   step costs as the search (Loop 003).
+- **Travel time (Loop 007):** `Router(..., speed_kn=, time_mult=)` holds a
+  time model separate from the cost model. `Router.path_hours(cells)` =
+  Σ segment km ÷ (speed × 1.852), with the per-segment speed taken from the
+  ML multiplier (`time_basis="ml_speed"`) or calm water
+  (`"calm_water"`). `time_hours` = `path_hours` rounded to 0.1 h. A bare
+  `Router(grid)` keeps the old calm-water 18 kn behaviour. `evaluate.py`,
+  `/api/route`, Streamlit and the rerouting simulation all pass the
+  vessel's ML time model. Definitions: Source of Truth §10.1.
 
 **Dynamic rerouting (simulation)** — Loop 004:
 
@@ -109,16 +117,18 @@ and the rerouting simulation run with `--network none` (verified, see
 **Tests** — `tests/` (stdlib `unittest`, committed data, no network):
 `test_routing.py` (8 tests: initial-route regression, cost, rerouting
 from intermediate/off-route positions, invalid positions) and
-`test_rerouting.py` (15 tests: scenarios A–E) and `test_server.py`
-(8 tests: `/api/meta`, `/api/route` unchanged, `/api/simulate` success,
-stable, reroute, config, failed alternative, invalid input). 31 tests
-pass (Loop 006).
+`test_rerouting.py` (16 tests: scenarios A–E, decisions independent of
+the time model) and `test_server.py` (10 tests: `/api/meta`, `/api/route`
+routes unchanged with corrected hours, time without ML cost, unknown
+vessel, `/api/simulate` cases). `test_routing.py` also has 7
+`TravelTimeTests` (independent per-segment RF calculation, cost↔time
+relation, vessel profiles, weather changes, calm-water default). 41
+tests pass (Loop 007).
 
 ## Planned (not implemented)
 
-- Phase 3: consistent ML-based travel time (ETA aligned with routing
-  cost), behavior across vessel profiles. The ML model is already used
-  in costs; ETA is not.
+- Phase 3 remainder: resolve the scikit-learn pickle skew (retrain or
+  pin) — `BLOCKERS.md` C5.
 - Phase 4 remainder: static-vs-dynamic evaluation across the fixed
   voyage set and vessel profiles (the UI part is done).
 - Phase 5 (optional): ML rerouting-decision experiment vs. the
@@ -133,11 +143,11 @@ in the current roadmap. See `TASKS.md` → Historical tasks.
 
 ## Known limitations (details in `BLOCKERS.md`)
 
-- `RouteResult.time_hours` = distance ÷ constant 18 kn
-  (`config.SHIP_SPEED_KN`), ignoring weather and vessel. Rerouting
-  decisions use `cost`, not `time_hours`.
+- Travel time is an estimate from a speed model trained on synthetic
+  data, bounded to [service ÷ 4, service] speed; it is not a real-world
+  ETA. Rerouting decisions use `cost`, never hours.
 - `cost` units depend on the cost model; compare costs only from the
-  same `Router`.
+  same `Router`. The analytic wave cost is not time.
 - A* heuristic may overestimate east–west distance north of ~13.5°N
   (up to ~9% at 27°N); its docstring calls it admissible.
 - Rerouting is simulation-only: synthetic `swh`-only perturbations,

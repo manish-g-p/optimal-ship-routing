@@ -11,36 +11,44 @@ Status values: `DONE`, `NEXT` (proposed or confirmed), `BACKLOG`,
 
 ## Current goal
 
-None in progress. The last implementation goal (dynamic rerouting in the
-Flask interface, Loop 006) is `DONE`.
+None in progress. The last implementation goal (route cost / travel time
+consistency, Loop 007) is `DONE`.
 
 ## Next goal — `NEXT` (proposed, needs user confirmation)
 
-**Route cost / ETA consistency and ML speed integration** — Source of
-Truth Phase 3, plus the one open Phase 1 item ("Verify ETA and cost
-consistency").
+**Static-vs-dynamic evaluation across voyages and vessels** — the rest of
+Source of Truth Phase 4 (§11).
 
-Why this one: it is the next phase in the roadmap order, and the main
-open correctness issue (Source of Truth §10) sits here — `time_hours` is
-distance at a constant 18 kn while routes are chosen by an ML/weather
-cost. Proposed scope, to be confirmed:
+Why this one: it is the only roadmap item left before the optional Phase 5,
+and the measurements so far (EXP-003/004) cover one voyage only. They
+show the benefit of rerouting depends on vessel and settings. Proposed
+scope, to be confirmed:
 
-- Report travel time from the same speed assumptions used for routing
-  (with the ML cost model, cost ÷ (service speed × 1.852) is hours).
-- Make the ML-vs-analytic cost model choice explicit for initial
-  routing, alternatives and remaining-route evaluation.
-- Check behavior across all five vessel profiles.
-- Document model limitations (synthetic training data, pickle skew).
+- Extend the existing evaluation to run `rerouting.compare_voyage` over
+  `evaluate.VOYAGES`, several vessel profiles and the weather scenarios.
+- Report travel time, distance, number of reroutes, unnecessary and
+  missed reroutes, and rerouting computation time (§11.2), using the
+  Loop 007 metric definitions.
+- Record threshold sensitivity, without changing the default policy.
 
-This was **not** decided by the user; it is the roadmap's next step.
-After Loop 005 the user chose the UI part of Phase 4 instead (Loop 006),
-so this proposal still awaits confirmation. The alternative is the rest of
-Phase 4: static-vs-dynamic evaluation across the fixed voyage set and
-vessel profiles.
+Smaller open item that could go first: resolve the scikit-learn pickle
+skew of the speed model (`BLOCKERS.md` C5, Phase 3 remainder).
+
+This was **not** decided by the user.
 
 ---
 
 ## Completed goals
+
+### Route cost, travel time and ETA consistency (Phase 3 + Phase 1 ETA item) — `DONE`
+
+Loop 007, 2026-10-03 (uncommitted when written). `Router` now has a travel-time model (`speed_kn`,
+`time_mult`, `path_hours`, `RouteResult.time_basis`) separate from the
+cost model. All application paths estimate travel time with the vessel's
+ML speed model; route selection is unchanged. Definitions are in Source of
+Truth §10.1 and Decision 011. Evidence: `TravelTimeTests`,
+`test_decisions_ignore_travel_time_model`, `VALIDATION.md` → Loop 007,
+EXP-005.
 
 ### Dynamic rerouting in the application interface (part of Phase 4) — `DONE`
 
@@ -51,7 +59,7 @@ initial plan, the sailed track, reroute points, weather-change locations
 and vessel progress (slider). They can inspect each rerouting evaluation's
 triggers and reason, and compare with the same voyage without rerouting.
 The logic stays in `src/rerouting.py` (`compare_voyage`,
-`config_from_dict`, `cost_hours`) and `src/weather_sim.py` (`peak_change`).
+`config_from_dict`; `cost_hours`, later removed in Loop 007) and `src/weather_sim.py` (`peak_change`).
 Flask only validates input and shapes JSON. Evidence:
 `tests/test_server.py`, `VALIDATION.md` → Loop 006 (including a headless
 browser check), `EXPERIMENTS.md` EXP-004. Not done: Streamlit
@@ -78,14 +86,14 @@ Goal definition and where each point is implemented/tested:
 Evidence: `VALIDATION.md` (Loops 004, 005), `EXPERIMENTS.md` EXP-003.
 Limitations carried forward: `BLOCKERS.md` C4.
 
-### Current-position rerouting (Source of Truth Phase 1) — `DONE` (ETA item open)
+### Current-position rerouting (Source of Truth Phase 1) — `DONE`
 
 Loop 003, 2026-10-03, commit `6fdfd91`. Arbitrary navigable start
 supported by `Router.search`; added start/goal validation,
 `RouteResult.cost`, `Router.path_cost`, `tests/test_routing.py`.
 Evidence: `VALIDATION.md` (Loop 003), `EXPERIMENTS.md` EXP-002. The
-Phase 1 item "verify ETA and cost consistency" is **not** done — moved
-into the next goal.
+Phase 1 item "verify ETA and cost consistency" was completed later, in
+Loop 007.
 
 ---
 
@@ -93,10 +101,10 @@ into the next goal.
 
 | Phase | Status |
 | --- | --- |
-| 1 — Rerouting foundation | `DONE` except ETA/cost consistency |
+| 1 — Rerouting foundation | `DONE` (ETA/cost item in Loop 007) |
 | 2 — Weather updates and rerouting triggers | `DONE` (simulation) |
-| 3 — ML speed prediction integration | `NEXT` (proposed) |
-| 4 — Evaluation and visualization | Partly `DONE` (UI, Loop 006); multi-voyage evaluation `BACKLOG` |
+| 3 — ML speed prediction integration | `DONE` except model artifact skew (C5) |
+| 4 — Evaluation and visualization | Partly `DONE` (UI, Loop 006); multi-voyage evaluation `NEXT` (proposed) |
 | 5 — Experimental ML rerouting decisions | `BACKLOG` (optional) |
 
 ---

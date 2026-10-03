@@ -8,7 +8,7 @@ written or a command ran once without error.
 Standard checks for routing/rerouting changes:
 
 ```bash
-python -m unittest discover -s tests -v          # 31 tests (Loop 006), ~60 s
+python -m unittest discover -s tests -v          # 41 tests (Loop 007), ~80 s
 python -m src.rerouting                          # scenario table (EXP-003)
 python -m src.evaluate                           # then diff evaluation.csv vs. the committed
                                                  # file excluding trad_sec/prop_sec; restore it
@@ -32,12 +32,45 @@ docker run --rm --network none nautilus-dev python -m unittest discover -s tests
 - [ ] Results recorded in `EXPERIMENTS.md`; docs updated per
       `README.md` → Maintenance convention.
 
-## Validation slot — next goal (ETA / cost consistency, ML integration)
+## Validation slot — next goal (multi-voyage static-vs-dynamic evaluation)
 
-Not started. Record here: the checks run, their actual outcomes, and the
-before/after `time_hours` vs. cost-derived time on the fixed voyages.
+Not started. Record here the checks run and their actual outcomes.
+Metric semantics to use: Source of Truth §10.1.
 
 ---
+
+## Loop 007 — route cost / travel time consistency (checks run in this loop)
+
+- [x] `python -m unittest discover -s tests -v` (host): **Ran 41 tests in
+      78.9 s — OK**: 15 routing (7 new `TravelTimeTests`; hours baseline
+      added to the evaluation-voyage test), 16 rerouting (1 new: decisions
+      ignore the time model; hour checks added), 10 API (2 new: route time
+      without ML cost, unknown vessel; `/api/route` hours and
+      `time_basis` checked).
+- [x] Independent check: per-segment RF predictions (`ml_model.predict_speed`,
+      same speed bounds), not via the multiplier grid, agree with
+      `Router.path_hours` within 1e-5 relative for Dijkstra and A* routes,
+      all 5 vessels, and `typical`/`rough`/storm weather.
+- [x] `python -m src.evaluate`: all non-time columns identical to the
+      committed CSV (route selection unchanged). `trad_h`/`prop_h` changed
+      as intended (EXP-005). The regenerated `evaluation.csv` is kept as the
+      new baseline; its timing columns also changed (wall-clock).
+- [x] `python -m src.rerouting`: scenario table identical to EXP-003.
+- [x] Headless Chromium UI script (as in Loop 006): all flows pass.
+      Route cards now read "est. hours (ML)" (Container Ship, Cochin →
+      Dubai, `typical`: 71 h for both routes); simulation numbers unchanged.
+      Console: only the known favicon 404 and the deliberate 400.
+- [x] Streamlit: `streamlit.testing.v1.AppTest` ran `app.py` and clicked
+      "Find route": no exceptions; metrics "Est. time (ML speed model)"
+      71 h for both routes.
+- [x] Docker: image rebuilt; `--network none` **Ran 41 tests in 81.6 s —
+      OK**. `python -m src.evaluate` in the container: Mumbai → Chennai
+      114 h / 114 h. Container `POST /api/route`: 2953.6 km / 114.5 h and
+      2954.9 km / 114.4 h, `time_basis` `ml_speed`.
+- [x] Before the change, the exploratory script showed the discrepancy
+      (EXP-005). On the old code the new hours baseline and the
+      independent-calculation test would fail (88.6 ≠ 114.4); I did not
+      run them against the old code.
 
 ## Loop 006 — rerouting in the Flask UI (checks run in this loop)
 

@@ -314,7 +314,7 @@ function card(name, tag, cls, res) {
     <div class="card-title"><b>${name}</b><span>${tag}</span></div>
     <div class="metrics">
       <div class="metric"><div class="v">${fmt(res.distance_km)}</div><div class="k">km</div></div>
-      <div class="metric"><div class="v">${fmt(res.time_hours)}</div><div class="k">hours</div></div>
+      <div class="metric"><div class="v">${fmt(res.time_hours)}</div><div class="k">${res.time_basis === "ml_speed" ? "est. hours (ML)" : "est. hours"}</div></div>
       <div class="metric"><div class="v">${res.max_wave_m}</div><div class="k">max wave m</div></div>
       <div class="metric"><div class="v">${res.min_coast_km}</div><div class="k">min coast km</div></div>
       <div class="metric"><div class="v">${fmt(res.expanded)}</div><div class="k">cells explored</div></div>

@@ -22,7 +22,8 @@ current Source of Truth (2026-10-03).
 | 007 | Threshold-based rerouting controller rules | **Confirmed** (baseline) |
 | 008 | Simulation model: route-cell position, deterministic `swh` perturbations, ML cost by default | **Confirmed** (prototype) |
 | 009 | Tests use stdlib `unittest` and committed data | **Confirmed** |
-| 010 | Rerouting UI: Flask only, via `/api/simulate`; logic stays in `src/` | **Confirmed** |
+| 010 | Rerouting UI: Flask only, via `/api/simulate`; logic stays in `src/` | **Confirmed** (hours source amended by 011) |
+| 011 | Metric semantics: distance / cost / travel time; ML time model for all routes | **Confirmed** |
 
 ---
 
@@ -136,11 +137,15 @@ around and returned `found=True` — silent navigability violations.
 existing (remaining) path, both from the **same** `Router` instance.
 `time_hours` is not used for decisions.
 
-**Why:** `time_hours` is distance at a constant 18 kn and does not
-reflect the weather/ML cost the route was optimized for (Source of Truth
-§10). Cost units differ between cost models (km; km × wave multiplier;
-km at service speed with the ML model), so costs from different routers
-are not comparable.
+**Why:** At the time, `time_hours` was distance at a constant 18 kn and
+did not reflect the weather/ML cost the route was optimized for (Source
+of Truth §10). Cost units differ between cost models (km; km × wave
+multiplier; km at service speed with the ML model), so costs from
+different routers are not comparable.
+
+> **Still in force after Loop 007.** `time_hours` is now a meaningful
+> travel-time estimate (Decision 011), but decisions still use cost only.
+> `test_decisions_ignore_travel_time_model` verifies this.
 
 ## Decision 007 — Threshold-based rerouting controller — CONFIRMED (baseline)
 
@@ -193,26 +198,52 @@ and the brief said to avoid new dependencies).
   not integrated (the smallest change that fits the brief).
 - New endpoint `POST /api/simulate`; existing endpoints unchanged apart
   from an added `simulation` key in `/api/meta`.
-- Voyage execution, dynamic/static comparison, config validation and
-  cost→hours conversion live in `src/rerouting.py`; the weather-change
+- Voyage execution, dynamic/static comparison and config validation live
+  in `src/rerouting.py`; the weather-change
   location helper lives in `src/weather_sim.py`. `server.py` only
   validates the request and shapes JSON; `web/app.js` only draws it.
-- The simulation always uses the ML speed cost model, so reported hours =
-  cost ÷ (service kn × 1.852) are consistent with the decisions.
-  `RouteResult.time_hours` is not shown for simulated voyages.
+- The simulation always uses the ML speed cost model. Loop 006 converted
+  cost to hours (cost ÷ (service kn × 1.852)). **Amended in Loop 007:**
+  hours now come from `Router.path_hours` / `VoyageResult.sailed_hours` /
+  `RouteResult.time_hours` (same numbers for the ML model, now one
+  definition), and `cost_hours` was removed.
 - Live weather is rejected for simulations (offline, deterministic).
 - Every simulated figure is labeled "simulated"/"model", and the response
   carries a note that it is not real-world performance.
+
+## Decision 011 — Route metric semantics and travel-time model — CONFIRMED
+
+**Decision (Loop 007):** see Source of Truth §10.1.
+
+- **Distance** (km): path length. **Cost**: the search objective, with
+  units that depend on the cost model. **Travel time** (h): Σ segment km ÷
+  segment speed, from a time model held by the `Router` (`speed_kn`,
+  `time_mult`) that is **separate from the cost model**.
+- Every application path (evaluation, `/api/route`, Streamlit,
+  simulation) uses the vessel's ML speed model for travel time, for
+  **all** routes, including Dijkstra and A* on the analytic wave cost. So
+  hours are comparable across algorithms; only the objective differs.
+- The analytic wave cost is never converted to hours. A `Router` with no
+  ML time model reports calm-water time at `speed_kn`, and a bare
+  `Router(grid)` keeps the old 18 kn behaviour for backward
+  compatibility. Results carry `time_basis`.
+- Route selection, rerouting thresholds and decisions are unchanged.
+
+**Why (as recorded in Loop 007):** before this, every route reported
+distance ÷ 18 kn regardless of vessel and weather. For General Cargo in
+`rough` weather the ML-estimated time was 29% higher than reported
+(114.4 h vs 88.6 h, Mumbai → Chennai). It also made A* look slower than Dijkstra on
+Cochin → Dubai (92.1 vs 83.1 h), when under the ML model it is faster
+(128.9 vs 135.0 h). ML cost was verified to be proportional to time; the
+4× multiplier cap binds on 0.5% of moves (`rough`, General Cargo) and
+floors speed at service ÷ 4, about the model's own minimum prediction.
 
 ---
 
 ## Unresolved choices
 
-- **Next goal:** Phase 3 (ETA/cost consistency + ML integration) is
-  proposed in `TASKS.md` but not confirmed by the user.
-- **ETA definition:** what `time_hours` should mean (ML-cost-derived hours
-  vs. constant speed) and whether Dijkstra results should report a
-  weather-aware ETA. Belongs to the next goal.
+- **Next goal:** multi-voyage static-vs-dynamic evaluation (Phase 4
+  remainder) is proposed in `TASKS.md` but not confirmed by the user.
 - **A* heuristic:** whether to correct the latitude scaling (possible
   overestimate north of ~13.5°N). See `BLOCKERS.md` C3.
 - **Rejected-alternative re-search:** the controller does not re-search

@@ -157,14 +157,16 @@ if go:
     start = grid.nearest_cell(*P.coord(origin))
     goal = grid.nearest_cell(*P.coord(dest))
 
+    # Travel time of both routes: ML speed model for this vessel/weather.
+    mult = get_multiplier(scenario, vessel_name)
+    timing = {"speed_kn": ves.service_speed_kn, "time_mult": mult}
     if show_dijkstra:
-        results["Dijkstra"] = R.Router(grid).search(start, goal, False, False)
+        results["Dijkstra"] = R.Router(grid, **timing).search(start, goal, False, False)
     if show_astar:
         if use_ml:
-            mult = get_multiplier(scenario, vessel_name)
-            router_a = R.Router(grid, weather=weather, mult_dir=mult)
+            router_a = R.Router(grid, weather=weather, mult_dir=mult, **timing)
         else:
-            router_a = R.Router(grid, weather=weather)
+            router_a = R.Router(grid, weather=weather, **timing)
         results["A*"] = router_a.search(start, goal, True, True)
 
     draw_route(fmap, results.get("Dijkstra"), "#1f77b4", "Dijkstra")
@@ -202,7 +204,7 @@ with col_info:
         max_wave[name] = mw
         st.markdown(f"**{name}** · _{tag}_")
         st.metric("Distance", f"{res.distance_km:,.0f} km")
-        st.metric("Est. time", f"{res.time_hours:,.0f} h "
+        st.metric("Est. time (ML speed model)", f"{res.time_hours:,.0f} h "
                                 f"({res.time_hours/24:.1f} days)")
         st.metric("Max wave on route", f"{mw} m")
         st.caption(f"cells explored: {res.expanded:,}")

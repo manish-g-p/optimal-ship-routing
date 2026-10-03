@@ -9,6 +9,31 @@ Truth; see `README.md` for how to read their "§" references.
 
 ---
 
+## 2026-10-03 — Loop 007: route cost / travel time consistency
+
+- **Changed:**
+  - `src/routing.py`: `Router(speed_kn, time_mult)`, `path_hours`,
+    `time_basis`, `RouteResult.time_basis`; `time_hours` now comes from
+    the time model.
+  - `src/rerouting.py`: router factory passes the time model;
+    `VoyageResult.sailed_hours`; `RerouteEvent.remaining_hours` /
+    `alternative_hours`; `cost_hours` removed.
+  - `server.py`: ML time model for both routes, `time_basis` in route
+    JSON, unknown vessel → 400, simulation hours from the new fields.
+  - `src/evaluate.py` and `app.py` (Streamlit): ML time model for both
+    routes; Streamlit label "Est. time (ML speed model)".
+  - `web/app.js`: card label "est. hours (ML)".
+  - `data/processed/evaluation.csv`: regenerated (hours corrected; timing
+    columns re-measured).
+  - Tests: `test_routing.py`, `test_rerouting.py`, `test_server.py`.
+  - Docs: Source of Truth §10.1 and status, `README.md`, `DOCKER.md`,
+    loop-engineering records.
+- **Not changed:** route selection (all distances, explored cells and
+  wave/coast metrics identical), rerouting thresholds and decisions,
+  simulation results, dependencies, Docker files.
+
+---
+
 ## 2026-10-03 — Loop 006: dynamic rerouting in the Flask UI
 
 - **Added:** `POST /api/simulate` (`server.py`); a "Voyage simulation"

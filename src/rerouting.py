@@ -27,6 +27,11 @@ Decision per evaluation (every `eval_interval` steps):
   6. Adopt it only if it is >= min_gain cheaper (relative) AND
      >= min_gain_abs cheaper (absolute); otherwise keep the route.
 
+Units: decisions compare routing COST (Router.path_cost). Reported hours
+come from the Router's travel-time model (Router.path_hours) and never
+feed into a decision. With the ML cost model the two are proportional
+(hours = cost / (service kn x 1.852)).
+
 compare_voyage() runs one scenario twice - with rerouting and with it
 disabled (static voyage) - and is what the CLI and the Flask API use.
 
@@ -94,6 +99,9 @@ class RerouteEvent:
     alternative_cost: float = None
     gain: float = None                       # remaining_cost - alternative_cost
     gain_rel: float = None
+    # travel-time estimates (h) - reporting only, not used for decisions
+    remaining_hours: float = 0.0
+    alternative_hours: float = None
 
 
 class RerouteController:
@@ -119,7 +127,8 @@ class RerouteController:
                if router.weather is not None else 0.0)
         ev = RerouteEvent(step=step, cell=tuple(remaining[0]), decision="",
                           reason="", remaining_cost=cost, planned_cost=planned,
-                          max_swh_m=swh)
+                          max_swh_m=swh,
+                          remaining_hours=router.path_hours(remaining))
 
         triggers = []
         if swh >= cfg.swh_trigger_m:
@@ -152,6 +161,7 @@ class RerouteController:
             return self._done(ev, "failed", problem)
 
         ev.alternative_cost = alt.cost
+        ev.alternative_hours = router.path_hours(alt.cells)
         ev.gain = cost - alt.cost
         ev.gain_rel = ev.gain / cost if cost > 0 else 0.0
         if ev.gain_rel >= cfg.min_gain and ev.gain >= cfg.min_gain_abs:
@@ -190,6 +200,8 @@ class VoyageResult:
     sailed_cost: float = 0.0  # cost of the track, each leg under the weather
                               # in force when it was sailed
     sailed_km: float = 0.0    # distance of the track
+    sailed_hours: float = 0.0 # travel time of the track, each leg under the
+                              # weather in force when it was sailed
     steps: int = 0
     arrived: bool = False
 
@@ -199,15 +211,19 @@ class VoyageResult:
 
 
 def router_factory(grid, vessel=None, model=None):
-    """weather -> Router. With an ML speed model the cost is the ML
-    speed-based multiplier (as in evaluate.py / server.py), otherwise the
-    analytic wave multiplier."""
+    """weather -> Router. With an ML speed model the cost AND the travel
+    time use the ML speed-based multiplier (as in evaluate.py / server.py);
+    otherwise the cost is the analytic wave multiplier and travel time is
+    calm-water time at the vessel's service speed."""
+    speed = vessel.service_speed_kn if vessel is not None else None
+
     def make(weather):
         if model is None:
-            return R.Router(grid, weather=weather)
+            return R.Router(grid, weather=weather, speed_kn=speed)
         from src import ml_model as ML
         mult = ML.build_multiplier_grid(grid, weather, vessel, model)
-        return R.Router(grid, weather=weather, mult_dir=mult)
+        return R.Router(grid, weather=weather, mult_dir=mult,
+                        speed_kn=speed, time_mult=mult)
     return make
 
 
@@ -253,6 +269,7 @@ def simulate(grid, start, goal, weather, make_router, updates=None,
         leg = active.cells[idx:nxt + 1]
         res.sailed_cost += router.path_cost(leg, ctl.use_weather)
         res.sailed_km += router.path_cost(leg, False)
+        res.sailed_hours += router.path_hours(leg)
         res.track.extend(tuple(c) for c in active.cells[idx + 1:nxt + 1])
         idx = nxt
         res.steps = step + 1
@@ -266,12 +283,6 @@ def simulate(grid, start, goal, weather, make_router, updates=None,
 # ----------------------------------------------------------------------
 # Scenario evaluation: dynamic vs static voyage under the same weather
 # ----------------------------------------------------------------------
-def cost_hours(cost, vessel):
-    """Hours for a cost from the ML cost model (km at service speed).
-    Not meaningful for the analytic wave multiplier."""
-    return cost / (vessel.service_speed_kn * 1.852)
-
-
 @dataclass
 class VoyageComparison:
     scenario: str
@@ -323,18 +334,16 @@ def run(origin="Cochin (Kerala)", dest="Dubai / Jebel Ali (UAE)",
     make = router_factory(grid, vessel, model)
     s = grid.nearest_cell(*P.coord(origin))
     g = grid.nearest_cell(*P.coord(dest))
-    kmh = vessel.service_speed_kn * 1.852    # ML cost / kmh = hours
-
     print(f"\n=== Dynamic rerouting: {origin} -> {dest} ===")
     print(f"Base weather: {base_scenario} | Vessel: {vessel_name} | "
-          f"cost = km x ML speed multiplier (hours = cost / {kmh:.1f} km/h)\n")
+          f"cost and hours from the ML speed model (simulated)\n")
     for name in WS.SCENARIOS:
         cmp = compare_voyage(grid, s, g, base, make, name)
         dyn, sta = cmp.dynamic, cmp.static
-        saved = sta.sailed_cost - dyn.sailed_cost
+        saved = sta.sailed_hours - dyn.sailed_hours
         print(f"[{name}] reroutes={len(dyn.reroutes)} arrived={dyn.arrived} | "
-              f"static {sta.sailed_cost / kmh:.1f} h -> dynamic "
-              f"{dyn.sailed_cost / kmh:.1f} h (saved {saved / kmh:.1f} h)")
+              f"static {sta.sailed_hours:.1f} h -> dynamic "
+              f"{dyn.sailed_hours:.1f} h (saved {saved:.1f} h)")
         for e in dyn.events:
             if e.decision != "no_trigger":
                 print(f"   step {e.step:>3} {e.decision:<9} {e.reason}"

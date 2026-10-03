@@ -9,6 +9,38 @@ task: TASK-002" are historical; see `README.md`.
 
 ---
 
+## Loop 007 — Route cost, travel time and ETA consistency
+
+**Date:** 2026-10-03
+**Branch / commit:** `feature/dynamic-routing`, on top of `1fd131d`
+(uncommitted when written)
+**Task:** User-directed: make route cost, travel time and ETA consistent
+(Source of Truth §10, Phase 3, Phase 1 ETA item).
+
+**What was done:** Traced cost and time through `routing.py`,
+`ml_model.py`, `rerouting.py`, `evaluate.py`, `server.py`, `app.py` and
+`web/app.js`. Measured the discrepancy and the ML multiplier bounds
+(EXP-005). Added a travel-time model to `Router` (`speed_kn`, `time_mult`,
+`path_hours`, `time_basis`) separate from the cost model. Wired the
+vessel's ML time model into evaluation, `/api/route`, Streamlit and the
+simulation (`sailed_hours`; event hours for reporting only). Removed
+`rerouting.cost_hours`. `/api/route` now rejects unknown vessels with 400
+(the ML grid it now always builds would otherwise give a 500). Regenerated
+`evaluation.csv`. Added tests. Updated the Source of Truth (§10.1 and
+status), README, DOCKER.md and these records. Also fixed a stale Source of
+Truth §15 bullet that still said rerouting was not in the UI (missed in
+Loop 006).
+
+**Validation:** `VALIDATION.md` → Loop 007.
+
+**Decision:** Done (Decision 011). Route selection and rerouting policy
+unchanged.
+
+**Next:** Awaiting user confirmation. Proposed: multi-voyage
+static-vs-dynamic evaluation (Phase 4 remainder).
+
+---
+
 ## Loop 006 — Dynamic rerouting in the application interface
 
 **Date:** 2026-10-03
