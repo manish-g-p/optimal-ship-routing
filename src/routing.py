@@ -5,6 +5,11 @@ Routing engine on the navigable grid (8-connected / king moves).
   * astar    : weather-aware optimal route (distance x wave-cost), with an
                admissible great-circle heuristic so it stays optimal.
 
+Any navigable (row, col) can be the start, so re-routing from a vessel's
+current position mid-voyage is just search(route.cells[i], route.cells[-1]).
+RouteResult.cost / Router.path_cost give the search objective so a new
+route and the remaining part of the active one can be compared fairly.
+
 Speed: a Router precomputes per-row step distances and per-cell weather
 multipliers once, so the search hot loop is just array look-ups. Both
 algorithms then finish in a fraction of a second on a laptop.
@@ -34,6 +39,8 @@ class RouteResult:
     max_wave_m: float = 0.0
     mean_wave_m: float = 0.0
     expanded: int = 0                               # cells explored (cost proxy)
+    cost: float = 0.0                               # accumulated search cost
+                                                    # (km x weather multiplier)
 
 
 class Router:
@@ -93,8 +100,24 @@ class Router:
         dlon = (self.lons[c] - glon) * C.KM_PER_DEG * self._coslat0
         return 0.999 * np.hypot(dlat, dlon)
 
+    # -- validation -----------------------------------------------------
+    def _check_cell(self, cell, what):
+        r, c = cell
+        if not (0 <= r < self.nlat and 0 <= c < self.nlon):
+            raise ValueError(f"{what} cell {(r, c)} is outside the grid "
+                             f"({self.nlat} x {self.nlon})")
+        if not self.nav[r * self.nlon + c]:
+            raise ValueError(f"{what} cell {(r, c)} is not navigable")
+
     # -- core search ----------------------------------------------------
     def search(self, start, goal, use_weather, use_heuristic):
+        """Route from `start` to `goal` (both (row, col) cells).
+
+        Raises ValueError if either cell is outside the grid or not
+        navigable; found=False means no navigable path connects them.
+        """
+        self._check_cell(start, "start")
+        self._check_cell(goal, "goal")
         nlon = self.nlon
         nav = self.nav
         dist_dir = self.dist_dir
@@ -120,7 +143,7 @@ class Router:
             visited[idx] = True
             expanded += 1
             if idx == g_idx:
-                return self._finalize(came, g_idx, use_weather, expanded)
+                return self._finalize(came, g_idx, use_weather, expanded, g)
 
             r, c = divmod(idx, nlon)
             for k, (dr, dc) in enumerate(_OFF):
@@ -143,7 +166,21 @@ class Router:
         return RouteResult(algorithm="A*" if use_weather else "Dijkstra",
                            found=False, expanded=expanded)
 
-    def _finalize(self, came, g_idx, use_weather, expanded):
+    def path_cost(self, cells, use_weather):
+        """Search cost of an existing path under this router's cost model -
+        e.g. the remaining part of an active route, for comparison with a
+        freshly computed alternative. Uses the same step costs as search()."""
+        mult_dir = self.mult_dir if use_weather else None
+        total = 0.0
+        for (r, c), (nr, nc) in zip(cells, cells[1:]):
+            k = _OFF.index((nr - r, nc - c))    # ValueError if not adjacent
+            cost = self.dist_dir[r, k]
+            if mult_dir is not None:
+                cost *= mult_dir[r, c, k]
+            total += cost
+        return float(total)
+
+    def _finalize(self, came, g_idx, use_weather, expanded, cost):
         nlon = self.nlon
         idx = g_idx
         path = []
@@ -171,6 +208,7 @@ class Router:
             max_wave_m=round(max(waves), 2),
             mean_wave_m=round(float(np.mean(waves)), 2),
             expanded=expanded,
+            cost=float(cost),
         )
 
 

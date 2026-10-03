@@ -171,6 +171,15 @@ python -m src.ml_model
 
 The trained model is written to `data/processed/speed_model.joblib`.
 
+### Tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The routing tests use the committed `data/processed/` artifacts. They check the
+initial evaluation routes and rerouting from a vessel's current position.
+
 ## Repository Contents
 
 ```text
@@ -188,6 +197,7 @@ src/ml_model.py           Speed-model training and inference
 src/evaluate.py           Route comparison and metrics
 src/ports.py              Port catalogue and coordinates
 src/vessel.py             Vessel profiles
+tests/                    Routing and rerouting tests (unittest)
 web/                      Flask frontend files
 data/processed/           Generated routing and model artifacts
 ```
