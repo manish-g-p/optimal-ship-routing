@@ -130,6 +130,31 @@ try {
     r.markers === 1 && r.r1 && r.activeStart[0] === r.r1.position[0] && Math.abs(r.path0.lat - r.r1.position[0]) < 1e-6);
   check("map keeps initial route and sailed track alongside the new active route",
     await ev("return lab.objs.initial.getPath().getLength() > 10 && lab.objs.track.getPath().getLength() > 10 && lab.objs.active.getPath().getLength() > 2;"));
+  const geo = await ev(`const s=lab.state; const e=s.timeline.find(x=>x.seq===s.reroutes[0].seq);
+    return {prev0: s.routes.previous ? s.routes.previous[0] : null, prevLen: lab.objs.prev.getPath().getLength(),
+            pos: s.reroutes[0].position, cause: e.detail.cause, shift: e.detail.corridor_shift_km, turn: e.detail.heading_change_deg};`);
+  check("replaced plan drawn (amber) from the reroute point, separate from the new plan",
+    !!geo.prev0 && geo.prev0[0] === geo.pos[0] && geo.prev0[1] === geo.pos[1] && geo.prevLen > 2,
+    `cause: ${geo.cause}; corridor shift ${geo.shift} km; turn ${geo.turn} deg`);
+  check("substantial storm -> substantial detour (corridor shift > 50 km)", geo.shift > 50, `${geo.shift} km`);
+  await ev(`window.__samples = []; window.__sampler = setInterval(() => { if (lab.objs.vessel) __samples.push(lab.objs.vessel.getPosition().toJSON()); }, 15);
+    $('lab-speed').value = '1500'; $('lab-step').click();`);
+  await waitFor(`!lab.busy && !lab.anim && lab.state.step === ${s4 + 2}`, 60000, "animated step");
+  const tp = await ev(`clearInterval(__sampler);
+    const line = new google.maps.Polyline({ path: lab.state.track.map(p => ({ lat: p[0], lng: p[1] })) });
+    const off = __samples.filter(p => !google.maps.geometry.poly.isLocationOnEdge(new google.maps.LatLng(p.lat, p.lng), line, 0.02));
+    const last = lab.objs.vessel.getPosition().toJSON(), end = lab.state.vessel.position;
+    return { n: __samples.length, off: off.length,
+             distinct: new Set(__samples.map(p => p.lat.toFixed(4) + ',' + p.lng.toFixed(4))).size,
+             endOk: Math.abs(last.lat - end[0]) < 1e-6 && Math.abs(last.lng - end[1]) < 1e-6 };`);
+  check("vessel moves along the sailed track, never off it (no teleport)", tp.off === 0 && tp.distinct > 3 && tp.endOk,
+    `${tp.n} samples, ${tp.distinct} distinct positions, ${tp.off} off-track, ends on backend position: ${tp.endOk}`);
+  await ev(`$('lab-speed').value = '150'; $('lab-safety').checked = true; $('lab-safety').dispatchEvent(new Event('change'));`);
+  await sleep(800);
+  check("safety overlay (water too shallow for the vessel) can be shown",
+    await ev("return !!lab.objs.safety && lab.objs.safety.getMap() === map && /safety_image\\?vessel=/.test(lab.objs.safety.get('src'));"));
+  await shot("3b-after-reroute-safety");
+  await ev(`$('lab-safety').checked = false; $('lab-safety').dispatchEvent(new Event('change'));`);
   await ev(`[...document.querySelectorAll('.tl.adopted')].pop().click();`);
   await sleep(500);
   check("timeline R1 entry opens decision detail (cost, alternative, gain, triggers)",
@@ -172,6 +197,17 @@ try {
   check("reset: step 0, no reroutes, no weather, map cleared to initial",
     await ev("const s=lab.state; return s.metrics.reroutes===0 && s.weather.applied.length===0 && s.weather.pending===null && lab.objs.rMarkers.length===0 && lab.objs.circles.length===0 && s.timeline[s.timeline.length-1].kind==='reset' && s.track.length===1;"));
 
+  // small disturbance must not cause rerouting / oscillation
+  const mid = await ev("const a=lab.state.routes.active; return a[Math.floor(a.length*0.5)];");
+  await ev(`labEditWeather([{ lat: ${mid[0]}, lon: ${mid[1]}, radius_km: 25, delta_m: 0.4 }]);`);
+  await waitFor("lab.state.weather.pending && !lab.busy", 15000, "small pending");
+  await ev(`$('weather-apply').click();`);
+  await waitFor("lab.state.weather.version === 1 && !lab.busy", 30000, "small apply");
+  for (let i = 0; i < 6; i++) { await ev(`$('lab-step').click();`); await waitFor(`!lab.busy && !lab.stepping && lab.state.step === ${i + 1}`, 30000, "small step"); }
+  check("small weather change: no reroute, plan unchanged over 6 steps (no oscillation)",
+    await ev("return lab.state.metrics.reroutes === 0 && lab.state.routes.route_version === 0;"),
+    await ev("return lab.state.timeline.filter(e=>e.kind==='evaluation' && e.detail.decision!=='no_trigger').map(e=>e.detail.decision+' '+(e.detail.gain_pct??'')).join(', ') || 'no triggered evaluation';"));
+
   // ---- 4. preset to completion ----
   await ev(`$('lab-preset').value='storm_ahead'; $('lab-preset').dispatchEvent(new Event('change')); $('lab-create').click();`);
   await waitFor("lab.state && lab.state.setup.preset === 'storm_ahead' && lab.state.step === 0 && !lab.busy", 30000, "preset voyage");
@@ -199,13 +235,31 @@ try {
   await shot("5-layout-1280");
   await send("Emulation.clearDeviceMetricsOverride");
 
+  // ---- 5b. infeasible voyage ----
+  const keepSid = await ev("return lab.sid;");
+  await ev(`$('vessel').value = 'Crude Oil Tanker (VLCC)'; $('vessel').dispatchEvent(new Event('change'));
+    $('origin').value = 'Kandla (Gujarat)'; $('dest').value = 'Cochin (Kerala)'; $('lab-preset').value = 'none'; $('lab-create').click();`);
+  await waitFor("!lab.busy && /No safe route/.test($('toast').textContent)", 30000, "infeasible message");
+  check("infeasible voyage (VLCC through 16 m water): clear message, previous session kept",
+    await ev(`return /required 24.6 m/.test($('toast').textContent) && lab.sid === '${keepSid}';`),
+    await ev("return $('toast').textContent;"));
+
   // ---- 6. back to route planning ----
   await ev(`document.querySelector('#mode button[data-val=route]').click();`);
   check("leaving lab clears its map objects and hides lab UI",
     await ev("return lab.objs.track === null && lab.objs.circles.length === 0 && $('lab-panel').classList.contains('hidden') && $('lab-bar').classList.contains('hidden');"));
   await ev(`$('go').click();`);
-  await waitFor("!$('results').classList.contains('hidden') && document.querySelectorAll('#cards .card').length === 2", 60000, "route again");
+  await waitFor("!$('results').classList.contains('hidden') && document.querySelectorAll('#cards .card').length === 2", 60000, "route infeasible");
+  check("route planning shows the infeasibility reason on both cards",
+    await ev("return [...document.querySelectorAll('#cards .card')].every(c => /no safe route/i.test(c.innerText) && /24.6 m/.test(c.innerText));"));
+  await ev(`$('vessel').value = 'General Cargo'; $('vessel').dispatchEvent(new Event('change'));
+    $('origin').value = 'Cochin (Kerala)'; $('dest').value = 'Dubai / Jebel Ali (UAE)'; $('go').click();`);
+  await waitFor("!$('results').classList.contains('hidden') && document.querySelectorAll('#cards .card .metrics').length === 2", 60000, "route again");
   check("route planning works again after the lab", true);
+  await ev(`document.querySelector('#mode button[data-val=sim]').click(); $('sim-scenario').value = 'adverse'; $('simulate').click();`);
+  await waitFor("$('results-title').textContent === 'Simulated voyage' && !$('results').classList.contains('hidden')", 90000, "replay");
+  check("voyage replay mode still works", await ev("return simData && simData.dynamic.reroutes >= 1;"),
+    await ev("return $('verdict').textContent;"));
   await ev(`document.querySelector('#mode button[data-val=lab]').click();`);
   check("re-entering lab restores the session", await ev("return lab.state && lab.objs.track && lab.objs.track.getPath().getLength() > 10;"));
   await shot("6-reenter-lab");
@@ -213,11 +267,13 @@ try {
   check("script error", false, e.message);
   try { await shot("failure"); } catch {}
 } finally {
-  const deliberate = httpErrors.filter((h) => !h.startsWith("400 /api/sim/sessions/") && !h.includes("favicon"));
+  const deliberate = httpErrors.filter((h) => !h.startsWith("400 /api/sim/sessions/") && h !== "422 /api/sim/sessions" && !h.includes("favicon"));
   console.log(`\nHTTP >= 400: ${httpErrors.length ? httpErrors.join(" | ") : "none"}`);
   console.log(`unexpected HTTP errors: ${deliberate.length ? deliberate.join(" | ") : "none"}`);
   console.log(`failed loads: ${failed.length ? failed.join(" | ") : "none"}`);
   console.log(`console errors / exceptions: ${consoleIssues.length ? "\n  " + consoleIssues.join("\n  ") : "none"}`);
+  const exc = consoleIssues.filter((x) => x.startsWith("EXCEPTION"));
+  check("no uncaught JavaScript exceptions", exc.length === 0, exc.length ? exc.join(" | ") : "");
   const nf = results.filter((x) => x[0] === "FAIL").length;
   console.log(`\n${results.length - nf}/${results.length} checks passed`);
   chrome.kill(); process.exit(0);

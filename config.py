@@ -71,7 +71,28 @@ GRID_RES = 0.05
 MIN_DEPTH_M = 10.0
 
 # Exclude any sea cell within this distance of land (synopsis: 22 km).
+# More precisely: within this distance of any "barrier" cell - land or
+# water shallower than MIN_DEPTH_M. Applied when the grid is loaded, so it
+# can be changed without rebuilding (grid.load_grid).
 COAST_BUFFER_KM = 22.0
+
+# Vessel-specific depth feasibility (hard constraint): a route cell needs
+# depth >= draft x (1 + UKC_FRACTION). Depths are GEBCO elevations relative
+# to mean sea level (not chart datum), downsampled to 0.05 deg keeping the
+# SHALLOWEST point of each block. Planning assumption, not a regulation.
+UKC_FRACTION = 0.20
+
+# Soft coastal-proximity preference (optional): cells between
+# COAST_BUFFER_KM and COAST_SOFT_KM from a barrier cost up to
+# (1 + COAST_PENALTY) times more, ramping linearly to 1 at COAST_SOFT_KM.
+# Affects route choice (cost) only, never travel time. 0 = off.
+COAST_SOFT_KM = 50.0
+COAST_PENALTY = 0.0    # OFF by default - see EXP-008 (Loop 010): 0.10 cuts
+                       # clearance-edge hugging from 38-51% to 11-14% of
+                       # route cells, but in rough weather it pushes routes
+                       # into rougher open water (mean peak wave 3.07 ->
+                       # 3.33 m, +1.1% time). Applies to weather-aware A*
+                       # only; the Dijkstra baseline stays pure distance.
 
 # ----------------------------------------------------------------------
 # Ship / cost-function parameters (used by the weather-aware A*)
@@ -103,6 +124,19 @@ REROUTE_RECHECK_STEPS = 4         # trigger: periodic re-check (0 = off), only
                                   # searches if the weather has changed
 REROUTE_MIN_GAIN = 0.03           # adopt only if alternative >= 3% cheaper
 REROUTE_MIN_GAIN_ABS = 20.0       # ... and at least this many cost units
+# Optional route-change awareness: while searching an alternative, a cell
+# d km from the current plan costs (1 + PENALTY x min(1, d / KM)) times
+# more. It only shapes WHICH alternative is found; adoption still compares
+# true (unpenalised) costs, so a genuinely better corridor is not blocked.
+REROUTE_DEVIATION_PENALTY = 0.10   # EXP-008: with the tolerance rule below it
+                                   # trims the median corridor shift 311 -> 275 km
+                                   # at no measurable loss of benefit
+REROUTE_DEVIATION_KM = 100.0
+# The nearby (penalised) alternative is used only if its true cost is within
+# this fraction of the best (unpenalised) alternative - i.e. only when both
+# offer similar benefit. A naive penalty without this check blocked useful
+# reroutes in Loop 010 testing (EXP-008).
+REROUTE_DEVIATION_TOL = 0.01
 
 # ----------------------------------------------------------------------
 # Flask web UI settings (formerly web_config.py - merged in here so there

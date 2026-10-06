@@ -56,9 +56,14 @@ def run(scenario="rough", vessel_name="General Cargo"):
 
     # Both routers estimate travel time with the same ML speed model, so
     # trad_h / prop_h are comparable; only the search objective differs.
-    timing = {"speed_kn": V.get(vessel_name).service_speed_kn, "time_mult": mult}
+    # Both obey the vessel's depth constraint; only A* uses the soft
+    # coastal-proximity preference (Dijkstra stays pure shortest distance).
+    ves = V.get(vessel_name)
+    timing = {"speed_kn": ves.service_speed_kn, "time_mult": mult,
+              "min_depth_m": V.required_depth_m(ves)}
     router_trad = R.Router(grid, **timing)                         # Dijkstra
-    router_prop = R.Router(grid, weather=weather, mult_dir=mult, **timing)  # A* + ML
+    router_prop = R.Router(grid, weather=weather, mult_dir=mult,   # A* + ML
+                           coast_penalty=C.COAST_PENALTY, **timing)
 
     rows = []
     for origin, dest in VOYAGES:

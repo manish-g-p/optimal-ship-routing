@@ -44,7 +44,7 @@ class MatrixTests(unittest.TestCase):
 
     def test_every_run_has_a_status(self):
         self.assertEqual(len(runs), len(subset))
-        self.assertTrue(set(runs.status) <= {"ok", "draft_infeasible",
+        self.assertTrue(set(runs.status) <= {"ok", "infeasible", "draft_infeasible",
                                              "incomplete", "failed"})
         self.assertEqual(list(runs.run_id), list(range(len(subset))))
 
@@ -77,7 +77,7 @@ class MetricTests(unittest.TestCase):
                          "incomplete")
 
     def test_paired_metrics_are_consistent(self):
-        for _, r in runs[runs.status != "failed"].iterrows():
+        for _, r in runs[~runs.status.isin(["failed", "infeasible"])].iterrows():
             self.assertAlmostEqual(r.delta_hours, r.dynamic_hours - r.static_hours)
             self.assertAlmostEqual(r.rel_change, r.delta_hours / r.static_hours)
             self.assertEqual(r.outcome, ER.classify_outcome(r.delta_hours))
@@ -116,10 +116,16 @@ class PairEquivalenceTests(unittest.TestCase):
 
 
 class StatusTests(unittest.TestCase):
-    def test_draft_infeasible_combination_is_flagged(self):
+    def test_draft_unsafe_combination_is_infeasible(self):
+        # Since Loop 010 routing enforces draft + under-keel margin, so the
+        # VLCC is not routed through 16 m water at all (formerly sailed and
+        # flagged "draft_infeasible" afterwards).
         r = runs[(runs.origin == SHALLOW[0]) & (runs.vessel == "Crude Oil Tanker (VLCC)")].iloc[0]
-        self.assertEqual(r.status, "draft_infeasible")
-        self.assertLess(min(r.min_depth_static_m, r.min_depth_dynamic_m), r.draft_m)
+        self.assertEqual(r.status, "infeasible")
+        self.assertIn("required 24.6 m", r.error)
+        self.assertTrue(np.isnan(r.dynamic_hours))          # no fabricated metrics
+        summ = ER.summarize(runs).iloc[0]
+        self.assertEqual(summ.infeasible, 1)
 
     def test_failed_run_is_recorded_not_dropped(self):
         def broken(weather):

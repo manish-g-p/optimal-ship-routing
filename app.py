@@ -159,14 +159,17 @@ if go:
 
     # Travel time of both routes: ML speed model for this vessel/weather.
     mult = get_multiplier(scenario, vessel_name)
-    timing = {"speed_kn": ves.service_speed_kn, "time_mult": mult}
+    timing = {"speed_kn": ves.service_speed_kn, "time_mult": mult,
+              "min_depth_m": V.required_depth_m(ves)}      # hard depth constraint
     if show_dijkstra:
         results["Dijkstra"] = R.Router(grid, **timing).search(start, goal, False, False)
     if show_astar:
         if use_ml:
-            router_a = R.Router(grid, weather=weather, mult_dir=mult, **timing)
+            router_a = R.Router(grid, weather=weather, mult_dir=mult,
+                                coast_penalty=C.COAST_PENALTY, **timing)
         else:
-            router_a = R.Router(grid, weather=weather, **timing)
+            router_a = R.Router(grid, weather=weather,
+                                coast_penalty=C.COAST_PENALTY, **timing)
         results["A*"] = router_a.search(start, goal, True, True)
 
     draw_route(fmap, results.get("Dijkstra"), "#1f77b4", "Dijkstra")

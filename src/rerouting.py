@@ -40,8 +40,11 @@ Run the scenario evaluation:  python -m src.rerouting
 import math
 from dataclasses import dataclass, field, fields
 
+import numpy as np
+from scipy import ndimage
+
 import config as C
-from src import routing as R
+from src import geo, routing as R
 
 ALGORITHMS = {"astar": (True, True), "dijkstra": (False, False)}
 
@@ -58,13 +61,18 @@ class RerouteConfig:
     recheck_steps: int = C.REROUTE_RECHECK_STEPS
     min_gain: float = C.REROUTE_MIN_GAIN
     min_gain_abs: float = C.REROUTE_MIN_GAIN_ABS
+    deviation_penalty: float = C.REROUTE_DEVIATION_PENALTY
+    deviation_scale_km: float = C.REROUTE_DEVIATION_KM
+    deviation_tol: float = C.REROUTE_DEVIATION_TOL
 
 
 # RerouteConfig fields a caller (e.g. the web API) may override, with the
 # smallest allowed value. Floats unless the default is an int.
 _TUNABLE = {"cells_per_step": 1, "eval_interval": 1, "cooldown_steps": 0,
             "swh_trigger_m": 0.0, "cost_trigger": 0.0, "recheck_steps": 0,
-            "min_gain": 0.0, "min_gain_abs": 0.0}
+            "min_gain": 0.0, "min_gain_abs": 0.0,
+            "deviation_penalty": 0.0, "deviation_scale_km": 10.0,
+            "deviation_tol": 0.0}
 
 
 def config_from_dict(overrides=None):
@@ -102,6 +110,29 @@ class RerouteEvent:
     # travel-time estimates (h) - reporting only, not used for decisions
     remaining_hours: float = 0.0
     alternative_hours: float = None
+    # geometry of an adopted alternative (reporting only)
+    alternative_kind: str = None             # "best" or "nearby" (similar benefit)
+    corridor_shift_km: float = None          # max distance of new route from old plan
+    length_change_km: float = None           # new route km - remaining old route km
+    heading_change_deg: float = None         # vessel heading in vs. new route heading
+
+
+class InfeasibleRoute(ValueError):
+    """No route satisfies the safety constraints (depth, coastal clearance)."""
+
+
+def distance_to_cells(cells, router):
+    """(nlat, nlon) field: km from each grid cell to the nearest of `cells`."""
+    mask = np.ones((router.nlat, router.nlon), dtype=bool)
+    rows, cols = zip(*cells)
+    mask[list(rows), list(cols)] = False
+    res_km = C.GRID_RES * C.KM_PER_DEG
+    return ndimage.distance_transform_edt(
+        mask, sampling=[res_km, res_km * router._coslat0])
+
+
+def _bearing(grid, a, b):
+    return float(geo.bearing_deg(*grid.cell_latlon(*a), *grid.cell_latlon(*b)))
 
 
 class RerouteController:
@@ -152,9 +183,24 @@ class RerouteController:
         self.searched(step, versions)
 
         goal = tuple(remaining[-1])
+        dist_old, extra = None, None
+        if cfg.deviation_penalty > 0:
+            dist_old = distance_to_cells(remaining, router)
+            extra = (1.0 + cfg.deviation_penalty * np.clip(
+                dist_old / cfg.deviation_scale_km, 0.0, 1.0)).ravel()
         try:
             alt = router.search(ev.cell, goal, self.use_weather, self.use_heuristic)
             problem = self._invalid(alt, ev.cell, goal, router)
+            ev.alternative_kind = "best"
+            if not problem and extra is not None:
+                # Prefer a route closer to the current plan only when it is
+                # about as good as the best one (true, unpenalised costs).
+                near = router.search(ev.cell, goal, self.use_weather,
+                                     self.use_heuristic, extra_cost=extra)
+                if near.found and not self._invalid(near, ev.cell, goal, router):
+                    near.cost = router.path_cost(near.cells, self.use_weather)
+                    if near.cost <= alt.cost * (1.0 + cfg.deviation_tol):
+                        alt, ev.alternative_kind = near, "nearby"
         except ValueError as e:
             alt, problem = None, f"route search failed: {e}"
         if problem:
@@ -166,6 +212,10 @@ class RerouteController:
         ev.gain_rel = ev.gain / cost if cost > 0 else 0.0
         if ev.gain_rel >= cfg.min_gain and ev.gain >= cfg.min_gain_abs:
             self.last_change_step = step
+            if dist_old is None:
+                dist_old = distance_to_cells(remaining, router)
+            ev.corridor_shift_km = float(max(dist_old[c] for c in alt.cells))
+            ev.length_change_km = alt.distance_km - router.path_cost(remaining, False)
             return self._done(ev, "adopted", f"alternative {100 * ev.gain_rel:.1f}% "
                                              f"({ev.gain:.0f}) cheaper", alt)
         return self._done(ev, "retained", f"gain {100 * ev.gain_rel:.1f}% "
@@ -182,8 +232,9 @@ class RerouteController:
             return "no navigable route to destination"
         if tuple(alt.cells[0]) != start or tuple(alt.cells[-1]) != goal:
             return "alternative does not run from the vessel to the destination"
-        if not all(self.grid.navigable[r, c] for r, c in alt.cells):
-            return "alternative crosses non-navigable cells"
+        nav, nlon = router.nav, router.nlon            # vessel-specific mask
+        if not all(nav[r * nlon + c] for r, c in alt.cells):
+            return "alternative crosses water that is not navigable for this vessel"
         try:
             router.path_cost(alt.cells, self.use_weather)   # adjacency check
         except ValueError:
@@ -214,16 +265,22 @@ def router_factory(grid, vessel=None, model=None):
     """weather -> Router. With an ML speed model the cost AND the travel
     time use the ML speed-based multiplier (as in evaluate.py / server.py);
     otherwise the cost is the analytic wave multiplier and travel time is
-    calm-water time at the vessel's service speed."""
+    calm-water time at the vessel's service speed. Every Router enforces
+    the vessel's depth constraint and the configured coastal preference,
+    so initial routes, alternatives and evaluations share one constraint
+    set."""
+    from src import vessel as V
     speed = vessel.service_speed_kn if vessel is not None else None
+    safety = {"min_depth_m": V.required_depth_m(vessel) if vessel is not None else None,
+              "coast_penalty": C.COAST_PENALTY}
 
     def make(weather):
         if model is None:
-            return R.Router(grid, weather=weather, speed_kn=speed)
+            return R.Router(grid, weather=weather, speed_kn=speed, **safety)
         from src import ml_model as ML
         mult = ML.build_multiplier_grid(grid, weather, vessel, model)
         return R.Router(grid, weather=weather, mult_dir=mult,
-                        speed_kn=speed, time_mult=mult)
+                        speed_kn=speed, time_mult=mult, **safety)
     return make
 
 
@@ -239,12 +296,14 @@ class Voyage:
 
     def __init__(self, grid, start, goal, router, config=None):
         self.cfg = config or RerouteConfig()
+        self.grid = grid
+        self.previous_plan = None            # old plan's remainder at the last adoption
         self.ctl = RerouteController(self.cfg, grid)
         self.router = self.plan_router = router
         active = router.search(start, goal, self.ctl.use_weather,
                                self.ctl.use_heuristic)
         if not active.found:
-            raise ValueError(f"no initial route from {start} to {goal}")
+            raise InfeasibleRoute(active.reason or f"no route from {start} to {goal}")
         self.ctl.searched(0, (0, 0))
         self.result = VoyageResult(initial_route=active, active_route=active,
                                    track=[tuple(start)])
@@ -285,6 +344,12 @@ class Voyage:
                                         (self.weather_v, self.route_v))
             res.events.append(ev)
             if new is not None:
+                self.previous_plan = list(self.active.cells[self.idx:])
+                track = res.track
+                if len(track) > 1:                       # heading in vs. out
+                    h_in = _bearing(self.grid, track[max(0, len(track) - 4)], track[-1])
+                    h_out = _bearing(self.grid, new.cells[0], new.cells[min(3, len(new.cells) - 1)])
+                    ev.heading_change_deg = abs((h_out - h_in + 180.0) % 360.0 - 180.0)
                 res.active_route, self.idx = new, 0
                 last = len(new.cells) - 1
                 self.plan_router = self.router
@@ -354,7 +419,7 @@ def compare_voyage(grid, start, goal, base, make_router, scenario,
     cfg = config or RerouteConfig()
     plan = make(base).search(start, goal, *ALGORITHMS[cfg.algorithm])
     if not plan.found:
-        raise ValueError(f"no route from {start} to {goal}")
+        raise InfeasibleRoute(plan.reason or f"no route from {start} to {goal}")
     depart, updates = WS.scenario(scenario, grid, base, plan)
     static_cfg = RerouteConfig(**{f.name: getattr(cfg, f.name)
                                   for f in fields(cfg)})

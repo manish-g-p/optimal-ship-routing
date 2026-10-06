@@ -1,6 +1,6 @@
 # Blockers and Open Concerns
 
-**Last reviewed:** 2026-10-03 (Loop 009), working tree on top of `c307fe5`.
+**Last reviewed:** 2026-10-06 (Loop 010), working tree on top of `ee4da2b`.
 
 - **Blocker:** prevents the current/next goal from being done or validated.
 - **Open concern:** a known correctness issue, risk or limitation that
@@ -89,7 +89,12 @@ Pinned in `requirements.txt`; still not imported anywhere (re-checked in
 Loop 005 with a repo-wide grep). Remove only as part of a deliberate
 dependency change.
 
-### C10 — Vessel draft is not used by routing (correctness gap, found in Loop 008)
+### C10 — Vessel draft is not used by routing — RESOLVED (Loop 010)
+
+Resolved by Decision 014: depth ≥ draft × 1.2 is enforced everywhere, and
+Kandla → Cochin is now *infeasible* for the Container Ship and VLCC with an
+explicit reason. Original finding kept below.
+
 
 The navigable grid applies one minimum depth (`config.MIN_DEPTH_M = 10 m`)
 to every vessel. Drafts are 9.0–20.5 m, so deep-draft vessels can be
@@ -121,6 +126,23 @@ sensitivity; missed beneficial reroutes (5 rejected alternatives had
 counterfactual run). The scenarios and thresholds were designed on one of
 the 25 voyage-vessel pairs (Cochin → Dubai, General Cargo), so that pair
 is in-sample.
+
+### C14 — Port approach cells far offshore (Loop 010)
+
+Ports are represented by the nearest cell that is navigable on the grid:
+Kandla 141 km, Mundra 100 km, Haldia 83 km and Mumbai 44 km away. That cell
+may also be too shallow for deep-draft vessels (Kandla: 16 m), which makes
+the voyage infeasible rather than finding a deeper approach. Narrow
+passages are closed by the 22 km clearance (Hormuz, Palk Strait). A
+vessel-aware approach model or a smaller clearance in designated channels
+would be a separate design decision.
+
+### C15 — Coastal-proximity trade-off (Loop 010)
+
+Cost-optimal routes follow the 22 km clearance edge on coastal voyages
+(38–51% of cells within 22–30 km). The soft coastal preference reduces this
+but increases rough-weather wave exposure (EXP-008), so it is off. Choosing
+a weight is a policy decision between coastal proximity and sea state.
 
 ### C13 — Simulation-lab limitations (Loop 009)
 

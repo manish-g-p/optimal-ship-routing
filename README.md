@@ -132,7 +132,8 @@ The Flask server exposes:
 | `GET` | `/api/meta` | Available ports, vessels, region bounds, and simulation options |
 | `GET` | `/api/weather?scenario=typical` | Weather overlay metadata |
 | `GET` | `/api/weather_image?scenario=rough` | Wave overlay PNG |
-| `POST` | `/api/route` | Calculate one or both routes |
+| `POST` | `/api/route` | Calculate one or both routes (an infeasible route has `found: false` and a `reason`) |
+| `GET` | `/api/safety_image?vessel=<name>` | PNG of water inside the navigable grid that is too shallow for that vessel |
 | `POST` | `/api/simulate` | Simulated voyage with weather-driven rerouting, compared with the same voyage without rerouting |
 | `GET` | `/api/sim/presets` | Simulation-lab demonstration scenarios, input limits, default rerouting settings |
 | `POST` | `/api/sim/sessions` | Create a Simulation-lab session (`origin`, `dest`, `vessel`, `base_weather`, `preset`, `rerouting_enabled`, `config`) |
@@ -221,6 +222,27 @@ All simulation figures are model estimates: the weather changes are synthetic
 and the speed model was trained on synthetic data. They are not real-world
 voyage performance.
 
+### Navigational safety
+
+Routes obey two hard constraints:
+
+- **Coastal clearance:** at least `COAST_BUFFER_KM` (22 km) from land and from
+  water shallower than 10 m.
+- **Vessel depth:** every cell at least draft × 1.2 deep (`UKC_FRACTION` in
+  `config.py`).
+
+Depths come from GEBCO relative to mean sea level, at 0.05° resolution, using
+the shallowest point of each cell. This is a planning model, not a
+navigational chart. When no route meets the constraints, the app says so and
+gives the reason. For example, the VLCC and Container Ship cannot use the
+Kandla → Cochin route, whose start cell is 16 m deep. It never falls back to
+an unsafe route.
+
+An optional coastal preference (`COAST_PENALTY`) is off by default: in rough
+weather it pushes routes into rougher water. An optional route-change
+preference (`REROUTE_DEVIATION_PENALTY`) keeps a reroute close to the current
+plan only when that is about as good as the best route.
+
 ### Simulation lab (interactive)
 
 In the Flask app, choose **Simulation lab**. Pick ports, a vessel, a
@@ -245,8 +267,12 @@ map shows:
 - the disturbances;
 - an overlay rendered from the applied weather field.
 
-The timeline lists every backend decision with its triggers, costs, the
-alternative found and the gain. The metrics compare the voyage with the
+When a route changes, the replaced plan stays visible (dashed amber) from
+the reroute point. The vessel marker moves only along the cells the backend
+reports as sailed. A toggle shows, in red, water too shallow for the chosen
+vessel. The timeline lists every backend decision with its triggers, costs,
+the alternative found and the gain, plus each reroute's cause, corridor shift
+and heading change. The metrics compare the voyage with the
 same voyage without rerouting under the same weather.
 
 Only significant wave height is simulated; wave period and direction stay

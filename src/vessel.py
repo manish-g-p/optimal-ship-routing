@@ -33,6 +33,15 @@ VESSELS = {
 DEFAULT_VESSEL = "Container Ship"
 
 
+def required_depth_m(vessel):
+    """Minimum water depth (m below mean sea level) a route cell must have
+    for this vessel: draft plus an under-keel clearance of
+    config.UKC_FRACTION x draft. A planning assumption, not a regulation:
+    depths are GEBCO (MSL, not chart datum) at 0.05 deg resolution."""
+    import config as C
+    return vessel.draft_m * (1.0 + C.UKC_FRACTION)
+
+
 def vessel_list():
     return list(VESSELS.keys())
 

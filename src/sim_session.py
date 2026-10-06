@@ -54,6 +54,10 @@ class NotFound(SessionError):
     status = 404
 
 
+class Infeasible(SessionError):
+    status = 422
+
+
 class Conflict(SessionError):
     status = 409
 
@@ -100,6 +104,19 @@ def validate_disturbances(items):
         seen.add(did)
         out.append(norm)
     return out
+
+
+def _cause(ev):
+    """Plain-language cause of a rerouting evaluation, from its triggers."""
+    kinds = []
+    for t in ev.triggers:
+        if t.startswith("max wave"):
+            kinds.append("severe waves on the route")
+        elif t.startswith("remaining cost"):
+            kinds.append("weather made the route costlier")
+        elif t.startswith("periodic"):
+            kinds.append("periodic re-check for a cheaper route")
+    return "; ".join(kinds) or "no trigger"
 
 
 def _signature(disturbances):
@@ -155,7 +172,8 @@ class SimSession:
         uw, uh = RR.ALGORITHMS[config.algorithm]
         self.plan = base_router.search(setup["start"], setup["goal"], uw, uh)
         if not self.plan.found:
-            raise SessionError("No navigable route between these ports.")
+            raise Infeasible("No safe route for this vessel: " + (self.plan.reason or
+                             "no navigable route between these ports") + ".")
         self.schedule = WS.preset(setup["preset"], self.plan)
         self._init_voyage()
 
@@ -171,8 +189,11 @@ class SimSession:
         self.applied = self._tag_preset(self.schedule.get(0, []), 0)
         router = self._router(self.applied)
         dyn_cfg = replace(self.config, enabled=self.setup["rerouting_enabled"])
-        self.dyn = RR.Voyage(self.grid, self.setup["start"], self.setup["goal"],
-                             router, dyn_cfg)
+        try:
+            self.dyn = RR.Voyage(self.grid, self.setup["start"], self.setup["goal"],
+                                 router, dyn_cfg)
+        except RR.InfeasibleRoute as e:
+            raise Infeasible(f"No safe route for this vessel at departure: {e}.") from None
         # (version, Weather) replaced as one object, so readers that do not
         # hold the session lock (the overlay image) always see a matching pair.
         self.weather_snapshot = (self.weather_version, router.weather)
@@ -353,10 +374,19 @@ class SimSession:
             "alternative_hours": None if ev.alternative_hours is None else round(ev.alternative_hours, 1),
             "gain_pct": None if ev.gain_rel is None else round(100 * ev.gain_rel, 2),
             "max_wave_m": round(ev.max_swh_m, 2),
+            "cause": _cause(ev),
         }
         if adopted:
             detail["reroute_no"] = len(self.dyn.result.reroutes)
-            msg = f"R{detail['reroute_no']}: alternative adopted - {ev.reason}"
+            detail["corridor_shift_km"] = round(ev.corridor_shift_km, 0)
+            detail["length_change_km"] = round(ev.length_change_km, 0)
+            detail["heading_change_deg"] = (None if ev.heading_change_deg is None
+                                            else round(ev.heading_change_deg, 0))
+            turn = ("" if ev.heading_change_deg is None
+                    else f", turn {ev.heading_change_deg:.0f}° at the reroute point")
+            msg = (f"R{detail['reroute_no']}: alternative adopted ({detail['cause']}) - "
+                   f"{ev.reason}; new route up to {ev.corridor_shift_km:.0f} km from the "
+                   f"old plan, {ev.length_change_km:+.0f} km{turn}")
         elif ev.decision == "no_trigger":
             msg = f"Route evaluated: no trigger (max wave {ev.max_swh_m:.1f} m)"
         elif ev.decision == "retained":
@@ -425,7 +455,13 @@ class SimSession:
             "dest": self._latlon(self.setup["goal"]),
             "routes": {"initial": self._path(r.initial_route.cells),
                        "active": self._path(dyn.active.cells),
+                       # remainder of the plan replaced at the last reroute
+                       "previous": (self._path(dyn.previous_plan)
+                                    if dyn.previous_plan else None),
                        "route_version": dyn.route_v},
+            "constraints": {"min_depth_m": round(dyn.router.min_depth_m or 0.0, 1),
+                            "coastal_clearance_km": C.COAST_BUFFER_KM,
+                            "coast_penalty": dyn.router.coast_penalty},
             "track": self._path(r.track),
             "vessel": {"position": self._latlon(dyn.position), "heading_deg": self._heading()},
             "metrics": {

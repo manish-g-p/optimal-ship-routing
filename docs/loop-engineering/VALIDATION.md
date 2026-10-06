@@ -8,9 +8,9 @@ written or a command ran once without error.
 Standard checks for routing/rerouting changes:
 
 ```bash
-python -m unittest discover -s tests -v          # 75 tests (Loop 009), ~3.5 min
+python -m unittest discover -s tests -v          # 94 tests (Loop 010), ~4 min
 python -m src.rerouting                          # scenario table (EXP-003)
-python -m src.evaluate_rerouting                 # 150-pair matrix, ~9 min (EXP-006); to check
+python -m src.evaluate_rerouting                 # 150-pair matrix, ~10 min alone (EXP-006/009); to check
                                                  # reproducibility, copy data/rerouting_eval/ first,
                                                  # re-run, compare all files (runs.csv excl. wall_s)
 python -m src.evaluate                           # then diff evaluation.csv vs. the committed
@@ -18,7 +18,7 @@ python -m src.evaluate                           # then diff evaluation.csv vs. 
 docker build -f docker/Dockerfile -t nautilus-dev .
 docker run --rm --network none nautilus-dev python -m unittest discover -s tests
 # web UI (server running on :8000, Maps key in .env):
-CHROME=/path/to/chrome node tools/lab_e2e.mjs <outdir>         # 28 browser checks
+CHROME=/path/to/chrome node tools/lab_e2e.mjs <outdir>         # 37 browser checks (Loop 010)
 python tools/lab_parity.py http://localhost:8000 host.json      # repeat against Docker, compare
 ```
 
@@ -44,6 +44,148 @@ Not started. Record here the checks run and their actual outcomes. If the
 change could affect routes or rerouting, re-run
 `python -m src.evaluate_rerouting` and compare with the committed
 `data/rerouting_eval/` (EXP-006 baseline), not only the unit tests.
+
+Do not run two evaluation matrices (or a Docker build) at the same time:
+the speed model uses every CPU core in each process, so parallel runs
+oversubscribe the CPU and take several times longer (Loop 010).
+
+---
+
+## Loop 010 — navigational safety and rerouting realism (checks run in this loop)
+
+All on the working tree on top of `ee4da2b`. Final configuration:
+`UKC_FRACTION` 0.20, `COAST_BUFFER_KM` 22, `COAST_PENALTY` 0 (off),
+`REROUTE_DEVIATION_PENALTY` 0.10 / 100 km / tolerance 1%. Rerouting
+thresholds unchanged.
+
+**Diagnosis before changes** (EXP-008 A/B): coastal proximity, depth,
+smoothing, port snapping and reroute geometry were measured on the
+unchanged code first.
+
+**Backend tests**
+
+- [x] Host, final code: `python -m unittest discover -s tests` → **Ran 94
+      tests in 235.5 s — OK** (75 existing + 19 in the new `test_safety.py`).
+      `test_safety.py` covers:
+      - required depth;
+      - infeasible endpoint with a reason (VLCC and Container Ship on
+        Kandla → Cochin, 16 m vs. 24.6 / 17.4 m);
+      - a depth limit forcing a deeper, longer route;
+      - no-path reason; grid errors still raising;
+      - all route cells ≥ 22 km clearance; clearance configurable at load
+        (stricter mask is a subset);
+      - soft penalty changes route choice but not travel time;
+      - initial, rerouted and static tracks all meet the VLCC depth;
+      - unsafe candidate rejected as "failed";
+      - `InfeasibleRoute` raised;
+      - reroute continuity (new plan starts at the vessel, the previous
+        plan starts there, the track has no jumps);
+      - route-change penalty compares true costs and keeps useful
+        reroutes;
+      - nearby route chosen only within tolerance;
+      - API: route `reason`, 422 for lab and replay, safety image, lab
+        state with constraints, cause and previous plan.
+- [x] Intended test change: `test_evaluate_rerouting` now expects VLCC
+      Kandla → Cochin to be `infeasible` (formerly sailed, then flagged
+      `draft_infeasible`).
+- [x] Defect caught by a baseline check during the loop: `Router(grid)`
+      briefly applied the config-default coastal penalty, so Dijkstra gave
+      2954.7 km instead of 2953.6 km. Fixed by making the penalty opt-in
+      per Router; baseline restored.
+
+**Route-planning regression** (`python -m src.evaluate`, General Cargo,
+`rough`)
+
+- [x] Every route distance, hour, wave and coast-distance column is
+      identical to the committed CSV. Only `trad_expanded` changed (−1 or −2
+      cells on 3 voyages), because the 10.8 m depth requirement removes a few
+      cells. The regenerated CSV is kept.
+- [x] With the coastal preference at 0.10 (tried before choosing the
+      default), A* routes changed (e.g. Cochin → Dubai peak wave 3.31 →
+      4.24 m). This is why the default is off (EXP-008 C).
+
+**Full rerouting evaluation** (`python -m src.evaluate_rerouting`, final
+configuration)
+
+- [x] **150 pairs in 576 s: 138 `ok`, 12 `infeasible`, 0 failed, 0
+      `draft_infeasible`.**
+- [x] Differences from the committed baseline (EXP-006):
+  - **Status:** the 6 former `draft_infeasible` runs (VLCC) and 6 former
+    `ok` runs (Container Ship) on Kandla → Cochin are now `infeasible`.
+    Depth constraint: start cell 16 m < 24.6 / 17.4 m.
+  - **Outcome categories:** of the 138 pairs `ok` in both, none changed
+    category (improved / unchanged / worsened). 66 are identical; 72
+    differ, mostly by +0.1 to +0.6 h in the rerouted voyage, with some
+    improvements (largest: LNG Carrier, Cochin → Dubai, shifting, 87.8 →
+    84.4 h). The no-rerouting voyage changed in 1 pair.
+  - **Summary:** improved 88 → 84, unchanged 50 → 48, worsened 6 → 6,
+    reroutes 139 → 136. Mean change −8.01% → −8.09%, median −5.00% →
+    −5.30%, worst +8.42% → +8.35%.
+  - **Attribution:** the nearby (route-change-penalty) alternative was used
+    in 106 of 136 adoptions. On the 8-connected grid, near-equal-cost
+    paths are common, so the tie rule often picks the variant closest to
+    the current plan (≤ 1% costlier by design). This is consistent with the
+    +0.1–0.6 h shifts. Corridor shift median 278 km, max 516 km; heading
+    change median 18°, 12 adoptions > 90°.
+- [x] **Reproducibility:** two runs of this configuration (the second with
+      extra event columns) were identical on all 45 shared non-timing
+      `runs.csv` columns and on all shared `events.csv` columns.
+- [ ] **Not completed:** the penalty-off variant, which would split the
+      72 differences exactly between the depth constraint and the
+      route-change penalty. It was still running when the loop stopped.
+      The attribution above therefore relies on the recorded
+      `alternative_kind`, not on that counterfactual.
+
+**Browser** (`tools/lab_e2e.mjs`, headless Chromium, real Maps key, host
+server)
+
+- [x] First run on the new code: **35/36**. The failure was in the check
+      (Chrome returns the uppercase-styled "NO SAFE ROUTE" from
+      `innerText`); fixed with a case-insensitive check, and the deliberate
+      422 was added to the expected errors.
+- [x] A later run showed an uncaught exception in the new vessel
+      animation (`requestAnimationFrame` timestamp earlier than the start
+      time made the track index −1), even though all checks passed. Fixed
+      by clamping. The script now **fails** on any uncaught JavaScript
+      exception, so this cannot pass silently again.
+- [x] Final host run: **37/37 PASS**. New checks: replaced plan drawn from
+      the reroute point; large storm → corridor shift 252 km; vessel
+      sampled 50 times during a step animation, every sample on the sailed
+      track and ending on the backend position (no teleport); safety
+      overlay shown; small disturbance (+0.4 m, σ 25 km) → no reroute and
+      no plan change over 6 steps; infeasible VLCC voyage → clear message,
+      previous session kept; route planning shows the infeasibility
+      reason on both cards; voyage replay still works. HTTP errors: only
+      the pre-existing favicon 404 and the deliberate 400 and 422. No
+      console errors, no exceptions.
+- [x] Screenshot reviewed after the reroute: replaced plan (amber), new
+      plan (blue), continuous sailed track (green) and vessel beyond R1.
+
+**Docker**
+
+- [x] Image rebuilt during the loop; `--network none` test suite: **Ran 94
+      tests in 325.7 s — OK**. That image was built **before** the last
+      code changes: the extra evaluation event columns, the animation
+      clamp, and the updated browser and parity scripts.
+- [ ] **Not done:** rebuild with the final code; browser suite against
+      the container server; host-vs-Docker parity.
+
+**Host vs. Docker parity**
+
+- [x] Host side only: `tools/lab_parity.py` (now also covers an infeasible
+      voyage and a small disturbance):
+  - infeasible voyage → HTTP 422 "No safe route for this vessel: start
+    water depth 16 m is less than the required 24.6 m.";
+  - manual storm: 1 reroute, 106.4 h vs. 135.0 h;
+  - `moving_storm`: 3 reroutes, 106.3 h vs. 118.2 h;
+  - rerouting off: 135.0 h;
+  - small disturbance: 0 reroutes, 100.9 h.
+- [ ] **Not done:** the same sequence against the Docker container and
+      the comparison.
+
+**Status of the definition of done:** backend, regression, evaluation and
+host browser validation are complete. Docker with the final code, browser
+checks against the container, and host–Docker parity are **open**.
 
 ---
 

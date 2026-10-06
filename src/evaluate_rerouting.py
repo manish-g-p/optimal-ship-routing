@@ -17,6 +17,8 @@ classified (status):
                       vessel's draft (the navigable grid only enforces
                       config.MIN_DEPTH_M = 10 m); metrics kept, but the
                       run is excluded from aggregate means
+  infeasible        - no route meets the vessel's depth / clearance
+                      constraints (since Loop 010; reason in `error`)
   incomplete        - a voyage did not reach the destination
   failed            - the simulation raised an error
 
@@ -146,6 +148,8 @@ def pair_record(spec, cmp, vessel, cfg, grid, wall_s):
         "reroutes": decisions["adopted"],
         **{f"n_{d}": decisions[d] for d in DECISIONS if d != "adopted"},
         "reroute_steps": " ".join(str(e.step) for e in dyn.reroutes),
+        "nearby_reroutes": sum(1 for e in dyn.reroutes if e.alternative_kind == "nearby"),
+        "max_corridor_shift_km": max((e.corridor_shift_km for e in dyn.reroutes), default=0.0),
         "wall_s": wall_s,
     }
     rec["error"] = ""
@@ -153,11 +157,13 @@ def pair_record(spec, cmp, vessel, cfg, grid, wall_s):
 
 
 def failed_record(spec, vessel, cfg, error):
+    infeasible = isinstance(error, RR.InfeasibleRoute)
     return {**spec, "service_speed_kn": vessel.service_speed_kn,
             "draft_m": vessel.draft_m, "base_weather": BASE_WEATHER,
             "algorithm": cfg.algorithm, "cost_model": "ml_speed",
             "config": json.dumps(asdict(cfg), sort_keys=True),
-            "status": "failed", "error": f"{type(error).__name__}: {error}"}
+            "status": "infeasible" if infeasible else "failed",
+            "error": str(error) if infeasible else f"{type(error).__name__}: {error}"}
 
 
 def event_records(run_id, cmp):
@@ -166,7 +172,11 @@ def event_records(run_id, cmp):
              "reason": e.reason, "triggers": "; ".join(e.triggers),
              "remaining_hours": e.remaining_hours,
              "alternative_hours": e.alternative_hours,
-             "gain_pct": None if e.gain_rel is None else 100 * e.gain_rel}
+             "gain_pct": None if e.gain_rel is None else 100 * e.gain_rel,
+             "alternative_kind": e.alternative_kind,
+             "corridor_shift_km": e.corridor_shift_km,
+             "length_change_km": e.length_change_km,
+             "heading_change_deg": e.heading_change_deg}
             for e in cmp.dynamic.events if e.decision != "no_trigger"]
 
 
@@ -210,6 +220,7 @@ def _summary(g):
         "ok": len(ok),
         "draft_infeasible": int((g.status == "draft_infeasible").sum()),
         "incomplete": int((g.status == "incomplete").sum()),
+        "infeasible": int((g.status == "infeasible").sum()),
         "failed": int((g.status == "failed").sum()),
         "improved": int((ok.outcome == "improved").sum()),
         "unchanged": int((ok.outcome == "unchanged").sum()),
@@ -334,7 +345,7 @@ def main():
 
     def progress(i, n, rec):
         tail = (f"{rec['outcome'] or '-':9} reroutes={rec['reroutes']} "
-                f"delta={rec['delta_hours']:+.1f} h") if rec["status"] != "failed" \
+                f"delta={rec['delta_hours']:+.1f} h") if rec["status"] not in ("failed", "infeasible") \
             else rec["error"]
         print(f"[{i + 1:>3}/{n}] {rec['voyage'][:34]:34} {rec['vessel'][:14]:14} "
               f"{rec['scenario']:13} {rec['status']:16} {tail}", flush=True)

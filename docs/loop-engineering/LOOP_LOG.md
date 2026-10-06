@@ -9,6 +9,49 @@ task: TASK-002" are historical; see `README.md`.
 
 ---
 
+## Loop 010 — Navigational safety and rerouting realism
+
+**Date:** 2026-10-06
+**Branch / commit:** `feature/dynamic-routing`, on top of `ee4da2b`
+(uncommitted when written)
+**Task:** User-directed: vessel-specific safety constraints, coastal
+clearance, sensible reroutes, and a lab that separates plan changes from
+vessel movement; validated on host and in Docker.
+
+**What was done:**
+
+- **Diagnosis first (EXP-008 A/B).** Routes ride the 22 km clearance edge
+  (a cost-function effect, not mask or rendering). Draft was unenforced.
+  Ports snap far offshore. Reroutes were geometrically continuous, but
+  jumped corridors (median 242 km) with occasional > 90° turns.
+- **Safety constraints.** Implemented vessel depth (draft × 1.2) and
+  load-time clearance, with explicit infeasible outcomes everywhere
+  (Decision 014).
+- **Coastal preference.** Measured in typical and rough weather and left
+  off: it raised rough-weather wave exposure.
+- **Route-change penalty.** A naive penalty blocked useful reroutes; the
+  similar-benefit rule replaced it and was adopted at 0.10 / 1%
+  (Decision 015).
+- **Bugs fixed during the loop:** the Router briefly applied the
+  config-default coastal penalty to the Dijkstra baseline (caught by a
+  baseline check, fixed by making the penalty opt-in); and the controller
+  had validated candidates against the generic grid instead of the vessel
+  mask.
+- **Lab:** replaced plan, safety overlay, vessel animation along sailed
+  cells only, constraints and causes, infeasible messages.
+- **Validation tooling:** tests (`test_safety.py`), browser checks and the
+  parity script were extended. The 150-pair evaluation was re-run,
+  including a penalty-off variant for attribution (EXP-009).
+
+**Validation:** `VALIDATION.md` → Loop 010.
+
+**Decision:** Done. Phase 4 (turn-rate model) is not implemented, as the
+measurements gave no justification for it.
+
+**Next:** Awaiting user confirmation (`TASKS.md`).
+
+---
+
 ## Loop 009 — Interactive Simulation lab
 
 **Date:** 2026-10-03

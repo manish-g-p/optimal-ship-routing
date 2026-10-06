@@ -3,7 +3,7 @@
 **Project:** Nautilus
 **Category:** ML-Assisted Dynamic Ship Routing System
 **Primary Focus:** Weather-Aware Rerouting and Machine Learning
-**Status (2026-10-03):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented, and the simulation can be run and inspected in the Flask UI, including an interactive Simulation lab with manual weather control (§12.1). Route cost, distance and travel time now have defined, tested semantics (§10.1). The threshold-based controller has been evaluated across all voyages, vessels and weather scenarios (§11.5). Next: to be decided (see `docs/loop-engineering/TASKS.md`). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
+**Status (2026-10-06):** Routing foundation, current-position rerouting and threshold-based dynamic rerouting (simulation) are implemented, and the simulation can be run and inspected in the Flask UI, including an interactive Simulation lab with manual weather control (§12.1). Route cost, distance and travel time now have defined, tested semantics (§10.1). The threshold-based controller has been evaluated across all voyages, vessels and weather scenarios (§11.5). Routes enforce vessel-specific depth (draft + under-keel margin) and coastal clearance, and reroutes record their geometry (§5.3). Next: to be decided (see `docs/loop-engineering/TASKS.md`). Detailed state: `docs/loop-engineering/PROJECT_STATE.md`.
 
 ---
 
@@ -165,6 +165,13 @@ The grid is used to:
 
 Dynamic rerouting must preserve navigability constraints when calculating alternative routes.
 
+**Implemented constraints (2026-10-06):**
+
+* **Grid.** 0.05° cells (≈ 5.6 × 5.4 km). Depth is GEBCO elevation relative to **mean sea level** (not chart datum). Downsampling keeps the **shallowest** point of each block, so cell depths are conservative.
+* **Coastal clearance (hard, all vessels).** A cell is navigable if it is ≥ `MIN_DEPTH_M` (10 m) deep and ≥ `COAST_BUFFER_KM` (22 km) from any land or water shallower than 10 m. The mask is recomputed when the grid loads, so the clearance is configurable without a rebuild. At 22 km it closes narrow passages: the Strait of Hormuz (Dubai uses the Fujairah approach), the Palk Strait, and parts of the Gulf of Kutch. Some ports therefore snap far offshore (Kandla 141 km, Mundra 100 km).
+* **Depth feasibility (hard, per vessel).** Every route cell needs depth ≥ draft × (1 + `UKC_FRACTION`), with `UKC_FRACTION` 0.20 (`vessel.required_depth_m`). This applies identically to initial routes, alternatives (the controller rejects candidates crossing water too shallow for the vessel), evaluation and both UIs. When no route qualifies, the result is an explicit infeasible outcome with a reason, never an unsafe fallback. Example: Kandla → Cochin is infeasible for the Container Ship and the VLCC (start cell 16 m vs. 17.4 / 24.6 m required).
+* **Coastal preference (soft, optional).** `COAST_PENALTY` raises cost near the clearance edge, for weather-aware A* only. It is **off by default**: in rough weather it pushes routes into rougher open water (EXP-008).
+
 ### 5.4 Existing Routing Algorithms
 
 The existing routing foundation includes:
@@ -209,6 +216,7 @@ As of 2026-10-03:
 * **Consistent travel time:** routes report travel time from the ML speed model for the selected vessel and weather, the same model the weather-aware cost uses (§10.1).
 * **Simulation lab:** `src/sim_session.py` + `/api/sim/sessions…` let a user step, pause, reset and edit weather during a voyage in the browser. The same `rerouting.Voyage` stepper used by `simulate()` makes every decision (§12.1).
 * **Rerouting evaluation:** `python -m src.evaluate_rerouting` compares rerouting-enabled and rerouting-disabled voyages across the fixed voyage set, all vessel profiles and all simulated weather scenarios (§11.5).
+* **Navigational safety and reroute geometry (2026-10-06):** vessel depth feasibility and configurable clearance (§5.3). An optional route-change penalty is used only when a nearby alternative is about as good as the best one. Each reroute records its corridor shift, length change, heading change and cause.
 * Not yet implemented: ML rerouting decisions (§8.2).
 
 ---
@@ -501,7 +509,7 @@ The objective is not to build a perfect vessel performance model, but to make ro
 | Travel time (`time_hours`, "est. hours") | h | Σ segment km ÷ (segment speed × 1.852). Segment speed is the ML-predicted speed for the vessel, sea state and heading ("ml_speed" basis), bounded to [service ÷ 4, service]. Without an ML model it is the calm-water service speed ("calm_water" basis). A route reports its basis in `time_basis`. |
 
 * Travel time is a property of the path and the time model, not of the algorithm that chose the path. The Flask API, Streamlit app and evaluation estimate Dijkstra and A* routes with the same ML model, so their hours are comparable.
-* With the ML cost model, cost ÷ (service speed × 1.852) equals travel time exactly; this relation is tested.
+* With the ML cost model, cost ÷ (service speed × 1.852) equals travel time exactly; this relation is tested. If the optional coastal preference is enabled (§5.3), cost also includes that soft penalty and is no longer exactly time. Travel time itself never includes penalties.
 * In voyage simulation, voyage time is the sum over sailed legs of each leg's travel time under the weather in force when it was sailed. Rerouting decisions use cost only; reported hours never feed a decision.
 * "ETA" in Nautilus means estimated time en route from departure, in hours. It is a model estimate (synthetic-data speed model), not a predicted real-world arrival time.
 
@@ -609,6 +617,11 @@ The Flask app has three modes: **Route planning**, **Voyage replay** (whole voya
 * **Step order:** apply pending and scheduled weather, then evaluate the active route and maybe reroute (unchanged controller), then advance the vessel.
 * **Traceability:** each evaluation is logged with its triggers, active-route cost and hours, whether a search ran, the alternative and its gain, and the decision and reason. Every reroute marker comes from a logged adoption.
 * **Sessions:** in memory, in one server process; up to 8, expiring after 30 minutes idle. Steps carry `expected_step`, so a repeated request cannot advance twice.
+* **Safety and reroute visibility (2026-10-06):**
+  - **Lab:** a red overlay can show water too shallow for the selected vessel. When the route changes, the replaced plan stays visible (dashed amber) from the reroute point, and the vessel marker advances along the backend's sailed cells between steps, so it never jumps off its track.
+  - **Timeline:** each reroute's cause, corridor shift, length change and heading change.
+  - **Infeasible voyages:** reported with their reason in the lab, in route planning and in replay.
+  - **Not modelled:** turning and manoeuvring. Adoption turns are a decision property, not a ship-dynamics one (median 19°, occasional > 90° in moving-storm cases; EXP-008).
 * **Demonstration scenarios:** deterministic disturbance schedules (`weather_sim.PRESETS`). Five reuse the evaluated scenarios' parameters; two are added: "storm over route" and "no useful alternative".
 
 ---
@@ -712,8 +725,9 @@ The following limitations should be considered during implementation.
 ### Route Evaluation
 
 * ETA and route cost were inconsistent until 2026-10-03 (constant 18 kn ETA); now defined in §10.1. Travel time is only as good as the synthetic-data speed model.
-* The navigable grid applies one 10 m minimum depth to all vessels. Vessel draft is not used in routing, so deep-draft vessels can be routed through water shallower than their draft. The evaluation flags this case (VLCC, Kandla → Cochin) but does not prevent it.
-* Rerouting decisions assume the current weather persists. Under moving weather they can make a voyage slower (§11.5).
+* Depth feasibility uses GEBCO depths relative to mean sea level at 0.05° resolution, plus a 20% under-keel margin. It ignores tides and chart datum, local surveys and squat, and it is not a navigational chart. Port approaches are represented by the nearest navigable cell, which can be far offshore (§5.3).
+* Routes tend to follow the 22 km clearance edge on coastal voyages (cost-optimal paths ride the constraint). This is legitimate under the constraint. The soft coastal preference that would reduce it is off by default because of its rough-weather wave-exposure cost (EXP-008).
+* Rerouting decisions assume the current weather persists. Under moving weather they can make a voyage slower (§11.5). Large corridor changes are mostly genuinely beneficial: a naive route-change penalty reduced them only by giving up time savings (EXP-008).
 * Simulation-lab sessions are held in one server process's memory; they are lost on restart and are not shared across workers or replicas. The lab's "remaining" and "projected" hours assume the current weather persists.
 * Dynamic and static routes must be compared under equivalent assumptions.
 * Simulation results may not reflect actual maritime operations.

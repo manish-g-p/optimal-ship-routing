@@ -1,8 +1,8 @@
 # Project State
 
-**Last updated:** 2026-10-03 (Loop 009 — interactive Simulation lab)
+**Last updated:** 2026-10-06 (Loop 010 — navigational safety and reroute geometry)
 **Branch / commit verified:** `feature/dynamic-routing`, working tree on
-top of `c307fe5` (Loop 009 changes not yet committed when written)
+top of `ee4da2b` (Loop 010 changes not yet committed when written)
 
 What is actually true in the repository now — verified against the code
 and test runs, not taken from other documents. Project direction and
@@ -68,6 +68,17 @@ simulation.
   `cost` is the accumulated search cost (Loop 003).
 - `Router.path_cost(cells, use_weather)`: scores any path with the same
   step costs as the search (Loop 003).
+- **Safety constraints (Loop 010, Decision 014):**
+  - `Router(min_depth_m=…)` makes cells shallower than the vessel's
+    requirement impassable: `vessel.required_depth_m` = draft × 1.2.
+  - Infeasible routes return `found=False` with a `reason`;
+    `rerouting.InfeasibleRoute` is raised for voyages. Clearance
+    (`COAST_BUFFER_KM`) is applied at `grid.load_grid()`;
+    `grid.dist_to_barrier_km` is exposed.
+  - Optional soft `coast_penalty` (default 0). Callers opt in: A* uses
+    `config.COAST_PENALTY`, Dijkstra stays pure distance.
+  - `search(extra_cost=…)` takes a per-search cost multiplier (used by the
+    route-change preference).
 - **Travel time (Loop 007):** `Router(..., speed_kn=, time_mult=)` holds a
   time model separate from the cost model. `Router.path_hours(cells)` =
   Σ segment km ÷ (speed × 1.852), with the per-segment speed taken from the
@@ -162,7 +173,10 @@ determinism on a real subset). `test_sim_session.py` (20 tests: session
 lifecycle, batch-engine parity, pending vs applied weather, manual storm →
 real reroute, preset/manual merging, validation, failure handling, store
 limits, API flow, invalid requests, busy/500 handling, existing endpoints).
-75 tests pass (Loop 009). Browser end-to-end: `tools/lab_e2e.mjs` (28
+`test_safety.py` (19 tests: depth feasibility and reasons, configurable
+clearance, soft penalty vs. time, safe alternatives, infeasible voyages,
+reroute continuity, route-change penalty and tie selection, API).
+94 tests pass (Loop 010). Browser end-to-end: `tools/lab_e2e.mjs` (36
 checks); host-vs-Docker parity: `tools/lab_parity.py`.
 
 ## Planned (not implemented)
@@ -195,9 +209,11 @@ in the current roadmap. See `TASKS.md` → Historical tasks.
   scenarios designed on one voyage (Cochin → Dubai, General Cargo).
   Evaluated on 5 voyages × 5 vessels (EXP-006): it worsened 6/144 runs,
   all under moving weather; decisions assume the current weather persists.
-- Vessel draft is not used by routing; the grid enforces 10 m for all
-  vessels. VLCC (20.5 m) on Kandla → Cochin crosses 16 m water
-  (`BLOCKERS.md` C10).
+- Depth uses GEBCO MSL depths at 0.05° plus a 20% margin; this is not a
+  navigational chart. Port approach cells can be far offshore and too
+  shallow for deep-draft vessels: Kandla → Cochin is infeasible for the
+  Container Ship and VLCC (`BLOCKERS.md` C14). Routes follow the 22 km
+  clearance edge on coastal legs (C15).
 - Voyage replay: the wave overlay shows the base weather, not the
   simulated storms (those are drawn as circles at the peak change); one
   request runs the voyage twice and can take several seconds (≈4 s for

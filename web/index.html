@@ -98,9 +98,15 @@
           <input type="number" id="cfg-gain" min="0" step="0.5" />
         </div>
       </div>
-      <div class="field">
-        <label>Wave trigger (m)</label>
-        <input type="number" id="cfg-swh" min="0" step="0.5" />
+      <div class="row">
+        <div class="field">
+          <label>Wave trigger (m)</label>
+          <input type="number" id="cfg-swh" min="0" step="0.5" />
+        </div>
+        <div class="field mode-lab hidden">
+          <label>Route-change penalty</label>
+          <input type="number" id="cfg-dev" min="0" step="0.05" />
+        </div>
       </div>
       <small class="hint" id="cfg-hint"></small>
     </details>
@@ -141,6 +147,16 @@
     <h2>Simulation lab <span class="tag">simulated</span></h2>
     <div id="lab-metrics" class="lab-metrics"></div>
     <p id="lab-compare" class="plan-line"></p>
+
+    <div id="lab-constraints" class="plan-line"></div>
+    <label class="chk inline-row"><input type="checkbox" id="lab-safety" />
+      <span>Show water too shallow for this vessel <em>(red)</em></span></label>
+    <div class="map-key">
+      <span><i class="k-initial"></i>initial plan</span>
+      <span><i class="k-active"></i>current plan</span>
+      <span><i class="k-prev"></i>replaced plan</span>
+      <span><i class="k-track"></i>sailed track</span>
+    </div>
 
     <h3 class="lab-h">Weather <span id="lab-weather-badge" class="badge-pill hidden">pending</span></h3>
     <div id="lab-weather-status" class="plan-line"></div>
