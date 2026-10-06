@@ -1,9 +1,9 @@
 # Running Nautilus in Docker
 
-This is a **development** image — source + full dependency set — not yet
-the minimal production/distribution image described in
-`docs/Source_Of_Truth.md` (that split is a later decision). It is **not**
-published anywhere (no Docker Hub push, no remote-server deployment).
+This is a **development** image — source + full dependency set. A
+minimal production/distribution image is not on the current roadmap. It
+is **not** published anywhere (no Docker Hub push, no remote-server
+deployment).
 
 **All commands below are run from the project root** (the directory this
 file is in), even though the Docker files themselves live in `docker/`.
@@ -70,6 +70,15 @@ docker run --rm nautilus-dev python run_all.py
 Both run fully offline — add `--network none` yourself to confirm no
 network access is used at all.
 
+**Run the tests and the dynamic-rerouting scenarios** (verified offline;
+see `docs/loop-engineering/VALIDATION.md`). The voyage simulation is also in
+the Flask UI (`python server.py`, "Voyage replay" and "Simulation lab" modes):
+
+```bash
+docker run --rm --network none nautilus-dev python -m unittest discover -s tests
+docker run --rm --network none nautilus-dev python -m src.rerouting
+```
+
 **Run the Flask UI** (Google Maps key optional — map tiles won't render
 without one, everything else works):
 
@@ -79,7 +88,15 @@ docker run --rm -p 8000:8000 --env-file .env nautilus-dev python server.py
 docker run --rm -p 8000:8000 -e GOOGLE_MAPS_API_KEY=your-key nautilus-dev python server.py
 ```
 
-Open http://localhost:8000.
+Open http://localhost:8000. All modes run in the container, including the
+interactive **Simulation lab**. Its sessions live in the memory of that
+single Flask process, so they are lost when the container stops. Do not
+scale it to several workers or replicas without shared session storage.
+The backend makes no outbound requests for the lab (only the optional
+"Live" sea state in route planning does). The browser loads Google Maps
+tiles itself. Verified in Loop 009: the browser end-to-end check passed
+against the container, and a deterministic lab run gave results
+identical to the host (`tools/lab_parity.py`).
 
 **Run the Streamlit UI** (no API key needed):
 
@@ -229,11 +246,11 @@ Confirmed (again, after this reorganization) to not change any output —
 diffed byte-for-byte against the baseline. Pre-existing, not introduced
 by Docker or this file move. See `docs/loop-engineering/BLOCKERS.md`.
 
-### ETA calculation (pre-existing, unrelated to this task)
+### ETA calculation — resolved (2026-10-03)
 
-`src/routing.py` computes ETA from distance at a constant speed rather
-than the accumulated weather-aware cost. Unaffected by this
-reorganization (no routing code was touched). Still open for Phase 2.
+Formerly computed from distance at a constant 18 kn. Travel time now comes
+from the ML speed model (`docs/Source_Of_Truth.md` §10.1); verified in the
+container (`docs/loop-engineering/VALIDATION.md`, Loop 007).
 
 ### Production/offline-distribution image not yet built
 
@@ -242,7 +259,8 @@ A minimal, distribution-focused image is a separate, later goal.
 
 ### Docker Hub / remote server
 
-Not in scope here. See `docs/loop-engineering/TASKS.md`.
+Not on the current roadmap (deferred). See
+`docs/loop-engineering/TASKS.md` → Historical tasks.
 
 ## Secret management
 

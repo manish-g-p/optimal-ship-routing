@@ -20,6 +20,15 @@
     </header>
 
     <div class="field">
+      <label>Mode</label>
+      <div class="segmented" id="mode">
+        <button data-val="route" class="active">Route planning</button>
+        <button data-val="sim">Voyage replay</button>
+        <button data-val="lab">Simulation lab</button>
+      </div>
+    </div>
+
+    <div class="field">
       <label>Vessel</label>
       <select id="vessel"></select>
       <small id="vessel-info" class="hint"></small>
@@ -45,7 +54,7 @@
       </div>
     </div>
 
-    <div class="field">
+    <div class="field mode-route">
       <label>Algorithms</label>
       <div class="toggles">
         <label class="chk"><input type="checkbox" id="use-dijkstra" checked />
@@ -59,15 +68,119 @@
       </div>
     </div>
 
-    <button id="go" class="btn-primary">🚢 Find optimal route</button>
+    <div class="field mode-sim hidden">
+      <label>Weather change during voyage</label>
+      <select id="sim-scenario"></select>
+      <small class="hint">Simulated, deterministic weather changes on top of
+        the Typical/Rough sea state. Live weather is not used.</small>
+    </div>
+
+    <div class="field mode-lab hidden">
+      <label>Demonstration scenario</label>
+      <select id="lab-preset"></select>
+      <small class="hint" id="lab-preset-info"></small>
+    </div>
+
+    <div class="field mode-lab hidden">
+      <label class="chk"><input type="checkbox" id="lab-rerouting" checked />
+        <span>Rerouting <em>threshold controller on/off</em></span></label>
+    </div>
+
+    <details class="mode-sim mode-lab hidden settings">
+      <summary>Rerouting settings</summary>
+      <div class="row">
+        <div class="field">
+          <label>Cooldown (steps)</label>
+          <input type="number" id="cfg-cooldown" min="0" step="1" />
+        </div>
+        <div class="field">
+          <label>Min. gain (%)</label>
+          <input type="number" id="cfg-gain" min="0" step="0.5" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Wave trigger (m)</label>
+        <input type="number" id="cfg-swh" min="0" step="0.5" />
+      </div>
+      <small class="hint" id="cfg-hint"></small>
+    </details>
+
+    <button id="go" class="btn-primary mode-route">🚢 Find optimal route</button>
+    <button id="simulate" class="btn-primary mode-sim hidden">⛈ Run simulated voyage</button>
+    <button id="lab-create" class="btn-primary mode-lab hidden">⚓ New voyage</button>
+    <small class="hint mode-lab hidden" id="lab-config-note">Uses the vessel, ports and
+      Typical/Rough sea state above. Changing them needs a new voyage.</small>
     <div id="status" class="status"></div>
   </aside>
 
   <!-- Results panel -->
   <section class="panel panel-right glass hidden" id="results">
-    <h2>Route comparison</h2>
+    <h2 id="results-title">Route comparison</h2>
     <div id="cards" class="cards"></div>
     <p id="verdict" class="verdict"></p>
+    <div id="sim-extra" class="sim-extra hidden"></div>
+  </section>
+
+  <!-- Simulation lab: control bar -->
+  <div class="lab-bar glass mode-lab hidden" id="lab-bar">
+    <button id="lab-start" class="lab-btn primary" title="Start or resume automatic stepping">▶ Start</button>
+    <button id="lab-pause" class="lab-btn" title="Pause after the current step">⏸ Pause</button>
+    <button id="lab-step" class="lab-btn" title="Advance exactly one simulation step">⏭ Step</button>
+    <button id="lab-reset" class="lab-btn" title="Back to step 0: discards progress, route changes and all manual weather (applied and pending)">↺ Reset</button>
+    <select id="lab-speed" title="Pause between automatic steps">
+      <option value="1500">Slow</option>
+      <option value="600" selected>Normal</option>
+      <option value="150">Fast</option>
+    </select>
+    <div class="lab-progress"><div id="lab-progress-bar"></div></div>
+    <span id="lab-status" class="lab-status">No voyage</span>
+  </div>
+
+  <!-- Simulation lab: metrics, weather, timeline -->
+  <section class="panel panel-right glass hidden" id="lab-panel">
+    <h2>Simulation lab <span class="tag">simulated</span></h2>
+    <div id="lab-metrics" class="lab-metrics"></div>
+    <p id="lab-compare" class="plan-line"></p>
+
+    <h3 class="lab-h">Weather <span id="lab-weather-badge" class="badge-pill hidden">pending</span></h3>
+    <div id="lab-weather-status" class="plan-line"></div>
+    <div id="lab-dist-list" class="dist-list"></div>
+    <div class="dist-form">
+      <div class="row">
+        <div class="field"><label>Δ wave height (m)</label>
+          <input type="number" id="dist-delta" step="0.5" value="5" /></div>
+        <div class="field"><label>Radius σ (km)</label>
+          <input type="number" id="dist-radius" step="10" value="150" /></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Latitude °N</label>
+          <input type="number" id="dist-lat" step="0.1" /></div>
+        <div class="field"><label>Longitude °E</label>
+          <input type="number" id="dist-lon" step="0.1" /></div>
+      </div>
+      <div class="dist-actions">
+        <button id="dist-place" class="lab-btn small" title="Then click the map">＋ Place on map</button>
+        <button id="dist-add" class="lab-btn small">＋ Add at lat/lon</button>
+        <button id="dist-update" class="lab-btn small" disabled>Update selected</button>
+        <button id="dist-remove" class="lab-btn small" disabled>Remove selected</button>
+      </div>
+      <div class="dist-actions">
+        <button id="weather-apply" class="lab-btn small primary" disabled>Apply now</button>
+        <button id="weather-discard" class="lab-btn small" disabled>Discard pending</button>
+        <button id="schedule-cancel" class="lab-btn small" disabled>Cancel scheduled updates</button>
+      </div>
+      <small class="hint">Positive Δ = storm, negative = calm patch (Gaussian, σ = radius).
+        Only significant wave height is simulated; wave period and direction stay
+        as in the base sea state. Pending changes reach the routing engine when you
+        click <b>Apply now</b> or at the next step. Drag a circle to move it.</small>
+    </div>
+
+    <h3 class="lab-h">Timeline
+      <label class="chk inline"><input type="checkbox" id="lab-routine" /><span>routine steps</span></label>
+    </h3>
+    <div id="lab-timeline" class="timeline"></div>
+    <p class="sim-note">Simulated: synthetic weather, ML speed model trained on synthetic data.
+      Remaining and projected hours assume the current weather persists. Not real-world performance.</p>
   </section>
 
   <!-- Wave legend -->

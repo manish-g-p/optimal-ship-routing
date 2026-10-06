@@ -1,6 +1,246 @@
 # Loop Log
 
-Chronological record of each development loop. Newest entry on top.
+Development-session history. Newest entry on top. File-level detail lives
+in `CHANGE_LOG.md`, evidence in `VALIDATION.md` / `EXPERIMENTS.md`.
+
+Loops 000–002 ran under the **previous** Source of Truth (branch
+`refactor/docker-containerization`). Their "§" references and "next
+task: TASK-002" are historical; see `README.md`.
+
+---
+
+## Loop 009 — Interactive Simulation lab
+
+**Date:** 2026-10-03
+**Branch / commit:** `feature/dynamic-routing`, on top of `c307fe5`
+(uncommitted when written)
+**Task:** User-directed: make the rerouting engine interactively testable
+in the browser, with manual weather, start/pause/step/reset, traceable
+decisions, on host and in Docker.
+
+**What was done:** Inspected the server, frontend, engine, Docker and
+tests. `/api/simulate` could not support pausing or mid-voyage weather,
+so I:
+
+1. Refactored the simulate loop into `rerouting.Voyage` and proved it
+   unchanged with the full evaluation re-run.
+2. Added `weather_sim.apply_disturbances` and `PRESETS`.
+3. Added `src/sim_session.py` (sessions, pending/applied weather,
+   no-rerouting twin, timeline, store) and the `/api/sim/…` endpoints.
+4. Added the Simulation lab UI: control bar, weather panel with map
+   click/drag, metrics, timeline, and an overlay of the applied field.
+5. Added `tests/test_sim_session.py`, `tools/lab_e2e.mjs` and
+   `tools/lab_parity.py`.
+
+Fixed five defects found in real-browser runs (VALIDATION → Loop 009).
+
+**Validation:** `VALIDATION.md` → Loop 009; measurements in EXP-007.
+
+**Decision:** Done (Decision 013). Thresholds and the routing cost model
+are unchanged.
+
+**Next:** Awaiting user confirmation (`TASKS.md`).
+
+---
+
+## Loop 008 — Rerouting evaluation across voyages and vessels
+
+**Date:** 2026-10-03
+**Branch / commit:** `feature/dynamic-routing`, on top of `e7597a1`
+(uncommitted when written)
+**Task:** User-directed: reproducible evaluation of threshold-based
+rerouting vs. no rerouting across the 5 voyages, all vessels and the
+weather scenarios (Source of Truth Phase 4, §11).
+
+**What was done:** Inspected `evaluate.py`, `rerouting.py`,
+`weather_sim.py`, the CSV format and tests. Probed feasibility: the grid
+ignores draft, and the VLCC cannot use the Kandla → Cochin route (16 m
+water). Measured pair run time (3–9 s). Added `src/evaluate_rerouting.py`
+(matrix, paired runs via `compare_voyage`, statuses, metrics, summaries,
+config record, heatmap) and `tests/test_evaluate_rerouting.py` (14
+tests). Ran the full matrix twice. Analysed the worsened runs (event
+logs; storm-position geometry). Improved the heatmap after reviewing it:
+rotated labels, per-cell n and worsened count, corrected the title (the
+VLCC cells average 4 voyages, not 5). Thresholds were not changed.
+
+**Validation:** `VALIDATION.md` → Loop 008. Results: EXP-006.
+
+**Decision:** Done (Decision 012). Two findings recorded as concerns:
+draft not modelled (C10), worse outcomes under moving weather (C11).
+
+**Next:** Awaiting user confirmation (`TASKS.md`).
+
+---
+
+## Loop 007 — Route cost, travel time and ETA consistency
+
+**Date:** 2026-10-03
+**Branch / commit:** `feature/dynamic-routing`, on top of `1fd131d`
+(uncommitted when written)
+**Task:** User-directed: make route cost, travel time and ETA consistent
+(Source of Truth §10, Phase 3, Phase 1 ETA item).
+
+**What was done:** Traced cost and time through `routing.py`,
+`ml_model.py`, `rerouting.py`, `evaluate.py`, `server.py`, `app.py` and
+`web/app.js`. Measured the discrepancy and the ML multiplier bounds
+(EXP-005). Added a travel-time model to `Router` (`speed_kn`, `time_mult`,
+`path_hours`, `time_basis`) separate from the cost model. Wired the
+vessel's ML time model into evaluation, `/api/route`, Streamlit and the
+simulation (`sailed_hours`; event hours for reporting only). Removed
+`rerouting.cost_hours`. `/api/route` now rejects unknown vessels with 400
+(the ML grid it now always builds would otherwise give a 500). Regenerated
+`evaluation.csv`. Added tests. Updated the Source of Truth (§10.1 and
+status), README, DOCKER.md and these records. Also fixed a stale Source of
+Truth §15 bullet that still said rerouting was not in the UI (missed in
+Loop 006).
+
+**Validation:** `VALIDATION.md` → Loop 007.
+
+**Decision:** Done (Decision 011). Route selection and rerouting policy
+unchanged.
+
+**Next:** Awaiting user confirmation. Proposed: multi-voyage
+static-vs-dynamic evaluation (Phase 4 remainder).
+
+---
+
+## Loop 006 — Dynamic rerouting in the application interface
+
+**Date:** 2026-10-03
+**Branch / commit:** `feature/dynamic-routing`, on top of `095bd0b`
+(uncommitted when written)
+**Task:** User-directed: make the voyage simulation usable through the
+existing interface (part of Source of Truth Phase 4).
+
+**What was done:** Inspected `server.py`, `web/` and `app.py`. Chose
+Flask only (Decision 010). Added `compare_voyage`, `config_from_dict`,
+`cost_hours` and `VoyageResult.sailed_km` to `src/rerouting.py`, and moved
+the CLI onto `compare_voyage`. Added `peak_change` to `src/weather_sim.py`.
+Added `POST /api/simulate` plus a `simulation` key in `/api/meta`. Added a
+mode switch, simulation controls and a simulation map/panel to `web/`.
+Added `tests/test_server.py`. During validation: rejected non-finite
+config values (JSON `NaN` would have disabled adoption silently); made
+weather-change markers prefer the largest increase (otherwise `shifting`
+showed some updates as "clearing"); capped the results panel above the
+wave legend.
+
+**Validation:** `VALIDATION.md` → Loop 006; measurements in EXP-004.
+
+**Decision:** Goal done. Phase 4 is partly done (UI); the multi-voyage
+static-vs-dynamic evaluation remains.
+
+**Next:** Still awaiting user confirmation. Phase 3 (ETA/cost
+consistency) is proposed; the Phase 4 remainder is the alternative.
+
+---
+
+## Loop 005 — Documentation synchronization
+
+**Date:** 2026-10-03
+**Branch / commit:** `feature/dynamic-routing` @ `e8f68d1` (changes uncommitted at time of writing)
+**Task:** User-directed: bring the Source of Truth and all
+loop-engineering records in line with the current direction and code.
+Documentation only.
+
+**What was done:**
+
+1. Read the Source of Truth and every file in `docs/loop-engineering/`,
+   plus `README.md` and `DOCKER.md`. Checked the code (`src/routing.py`,
+   `src/rerouting.py`, `src/weather_sim.py`, `config.py`, tests) and git
+   history.
+2. Found that the brief's premise was out of date: it described
+   weather-driven dynamic rerouting as the *next, unimplemented* goal,
+   but it was already committed (`e8f68d1`, Loop 004) and passing tests.
+   Documented it as implemented (with point-by-point evidence in
+   `TASKS.md`) instead of planned. Recorded the roadmap's next phase
+   (Phase 3, ETA/cost + ML integration) as **proposed**, pending user
+   confirmation.
+3. Re-ran tests and the scenario evaluation on the host and offline in
+   Docker (`VALIDATION.md` → Loop 005). Re-checked old open questions
+   (sklearn skew, `networkx`, tracked PDFs).
+4. Rewrote `README.md` (navigation, reading order, maintenance
+   convention), `PROJECT_STATE.md` and `TASKS.md` for the current state.
+   Restructured `BLOCKERS.md`. Added decisions 004–009 to `DECISIONS.md`
+   and marked 001 superseded. Added EXP-002/003 and planned experiments.
+   Added Loop 003–005 records here and in `VALIDATION.md` /
+   `CHANGE_LOG.md`. Updated the Source of Truth status line, roadmap
+   status, §5 implemented capabilities and §14 maintenance pointer.
+   Updated stale references in `DOCKER.md` and the feature list in root
+   `README.md`.
+
+**Validation:** see `VALIDATION.md` → Loop 005.
+
+**Decision:** Documentation reflects `e8f68d1`. Next goal proposed, not
+started.
+
+**Next:** User to confirm the next goal (Phase 3 proposed; Phase 4 is the
+alternative).
+
+---
+
+## Loop 004 — Weather-driven dynamic rerouting
+
+**Date:** 2026-10-03 (committed as `e8f68d1`, "feat: weather driven
+re-routing added and simulations passed")
+**Branch:** `feature/dynamic-routing`
+**Task:** User-directed: Source of Truth Phase 2 — simulated weather
+updates, vessel progress, remaining-route evaluation, threshold-based
+controller, scenario tests.
+
+**What was done:** Added `src/weather_sim.py` (deterministic wave-height
+perturbations, named scenarios), `src/rerouting.py` (controller, voyage
+simulation, event log, console evaluation), `REROUTE_*` defaults in
+`config.py`, `tests/test_rerouting.py` (15 tests, scenarios A–E), and a
+README section. Updated Source of Truth §15. No change to
+`src/routing.py`. During development: added a periodic re-check trigger
+(an improving alternative was otherwise never noticed); fixed it
+re-firing every step; recorded the search after adoption to avoid a
+wasted re-search; widened the `improving_alt` storm so the scenario
+exercises an adoption; replaced a Scenario D design whose storms missed
+the rerouted path.
+
+**Validation:** `VALIDATION.md` → Loop 004; results in EXP-003.
+
+**Decision:** Phase 2 done at simulation level (Decisions 006–008). The
+loop stopped without starting ML decision work, as instructed.
+
+**Next (as stated then):** not assigned; limitations listed (now
+`BLOCKERS.md` C1–C4).
+
+---
+
+## Loop 003 — Current-position rerouting
+
+**Date:** 2026-10-03 (committed as `6fdfd91`, "fix: minor failures and
+bugs in routing fixed", together with the user's Source of Truth rewrite,
+which was already in the working tree when the loop started)
+**Branch:** `feature/dynamic-routing`
+**Task:** User-directed: Source of Truth Phase 1 — implement and validate
+rerouting from an arbitrary valid intermediate position.
+
+**What was done:** Inspected routing, grid, ports, evaluation, server and
+ML code. Probed behavior (EXP-002): arbitrary starts already worked, but
+the search cost was not exposed and invalid starts were silently
+accepted. Added start/goal validation (`ValueError`), `RouteResult.cost`
+and `Router.path_cost` to `src/routing.py`. Created `tests/` (stdlib
+`unittest`, 8 tests). Added a tests section to the README.
+
+**Validation:** `VALIDATION.md` → Loop 003.
+
+**Decision:** Phase 1 done except ETA/cost consistency (Decision 005).
+Loop-engineering documents were **not** updated in this loop. That gap
+was closed in Loop 005.
+
+**Next (as stated then):** stop; await the next milestone.
+
+---
+
+## Note — 2026-10-02 Docker file reorganization (no loop entry)
+
+Commit `79f130b` moved the Docker files into `docker/` and updated
+`DOCKER.md`, `CHANGE_LOG.md` and `PROJECT_STATE.md`. No `LOOP_LOG.md` entry
+was written at the time. Whether it was run as a numbered loop is
+unknown. Details: `CHANGE_LOG.md` (2026-10-02).
 
 ---
 

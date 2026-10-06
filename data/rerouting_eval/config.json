@@ -1,0 +1,44 @@
+{
+  "code_version": "e7597a1+uncommitted",
+  "base_weather": "typical",
+  "scenarios": [
+    "stable",
+    "adverse",
+    "worsening",
+    "improving_alt",
+    "minor",
+    "shifting"
+  ],
+  "voyages": [
+    "Mumbai (JNPT) -> Chennai (Tamil Nadu)",
+    "Kandla (Gujarat) -> Cochin (Kerala)",
+    "Cochin (Kerala) -> Dubai / Jebel Ali (UAE)",
+    "Visakhapatnam (AP) -> Colombo (Sri Lanka)",
+    "Chennai (Tamil Nadu) -> Port Blair (Andaman)"
+  ],
+  "vessels": [
+    "Bulk Carrier (Panamax)",
+    "Container Ship",
+    "Crude Oil Tanker (VLCC)",
+    "General Cargo",
+    "LNG Carrier"
+  ],
+  "reroute_config": {
+    "algorithm": "astar",
+    "enabled": true,
+    "cells_per_step": 10,
+    "eval_interval": 1,
+    "cooldown_steps": 3,
+    "swh_trigger_m": 4.0,
+    "cost_trigger": 0.05,
+    "recheck_steps": 4,
+    "min_gain": 0.03,
+    "min_gain_abs": 20.0
+  },
+  "cost_model": "A* with ML speed multiplier; travel time from the same ML speed model (Source of Truth 10.1)",
+  "outcome_tolerance_hours": 0.1,
+  "draft_check": "min water depth on both sailed tracks >= draft",
+  "non_deterministic_columns": [
+    "wall_s"
+  ]
+}

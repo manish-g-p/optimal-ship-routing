@@ -90,6 +90,21 @@ MAX_WEATHER_MULT = 4.0
 KM_PER_DEG = 111.195   # mean km per degree of latitude
 
 # ----------------------------------------------------------------------
+# Dynamic rerouting (src/rerouting.py). Defaults for RerouteConfig.
+# "Cost" is the routing search cost (Router.path_cost): km x weather
+# multiplier, i.e. km-equivalent at service speed with the ML cost model.
+# ----------------------------------------------------------------------
+REROUTE_CELLS_PER_STEP = 10       # cells the vessel advances per step (~55 km)
+REROUTE_EVAL_INTERVAL = 1         # evaluate the active route every N steps
+REROUTE_COOLDOWN_STEPS = 3        # min steps between two route changes
+REROUTE_SWH_TRIGGER_M = 4.0       # trigger: max wave height on remaining route
+REROUTE_COST_TRIGGER = 0.05       # trigger: remaining cost up >= 5% vs plan
+REROUTE_RECHECK_STEPS = 4         # trigger: periodic re-check (0 = off), only
+                                  # searches if the weather has changed
+REROUTE_MIN_GAIN = 0.03           # adopt only if alternative >= 3% cheaper
+REROUTE_MIN_GAIN_ABS = 20.0       # ... and at least this many cost units
+
+# ----------------------------------------------------------------------
 # Flask web UI settings (formerly web_config.py - merged in here so there
 # is a single configuration module, with secrets/per-environment values
 # coming from the environment / .env rather than being hardcoded).

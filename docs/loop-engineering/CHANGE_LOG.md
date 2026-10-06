@@ -4,6 +4,134 @@ Human-readable summary of what changed, loop by loop. Complements
 `LOOP_LOG.md` (which records process/decisions) by summarizing concrete
 file-level changes.
 
+Entries before 2026-10-03 were written under the previous Source of
+Truth; see `README.md` for how to read their "§" references.
+
+---
+
+## 2026-10-03 — Loop 009: interactive Simulation lab
+
+- **Added:** `src/sim_session.py`; `tests/test_sim_session.py` (20 tests);
+  `tools/lab_e2e.mjs` (browser check); `tools/lab_parity.py` (environment
+  comparison).
+- **Changed:**
+  - `src/rerouting.py`: `Voyage` stepper; `simulate()` uses it, with
+    identical results.
+  - `src/weather_sim.py`: `apply_disturbances`, `PRESETS`/`preset`;
+    `perturb_waves` uses a shared `_bump`, with identical results.
+  - `server.py`: `/api/sim/presets` and `/api/sim/sessions…` endpoints;
+    overlay rendering factored into `_swh_png`.
+  - `web/index.html`, `web/app.js`, `web/style.css`: Simulation-lab mode;
+    replay mode relabelled "Voyage replay"; generic mode visibility; toast
+    timer fix.
+  - Docs: `README.md`, `DOCKER.md`, Source of Truth (§5.7, §12.1, §15,
+    status), loop-engineering records.
+- **Not changed:** routing algorithms, cost/time model, rerouting
+  thresholds and decisions, `/api/route`, `/api/meta` (existing keys),
+  `/api/simulate`, `data/processed/`, `data/rerouting_eval/`,
+  dependencies, Docker files.
+
+---
+
+## 2026-10-03 — Loop 008: rerouting evaluation
+
+- **Added:**
+  - `src/evaluate_rerouting.py`;
+  - `tests/test_evaluate_rerouting.py` (14 tests);
+  - `data/rerouting_eval/` (runs.csv, events.csv, summary_overall.csv,
+    summary_by_voyage.csv, summary_by_vessel.csv, summary_by_scenario.csv,
+    config.json, rel_change_vessel_scenario.png).
+- **Changed:** docs (Source of Truth §5.7, §11.5, §15, Phase 4 status;
+  `README.md`; loop-engineering records, including a stale
+  `evaluation.csv` statement in `PROJECT_STATE.md`).
+- **Not changed:** routing, rerouting controller, thresholds, weather
+  scenarios, `src/evaluate.py`, `data/processed/` (including
+  `evaluation.csv`), API/UI, dependencies.
+
+---
+
+## 2026-10-03 — Loop 007: route cost / travel time consistency
+
+- **Changed:**
+  - `src/routing.py`: `Router(speed_kn, time_mult)`, `path_hours`,
+    `time_basis`, `RouteResult.time_basis`; `time_hours` now comes from
+    the time model.
+  - `src/rerouting.py`: router factory passes the time model;
+    `VoyageResult.sailed_hours`; `RerouteEvent.remaining_hours` /
+    `alternative_hours`; `cost_hours` removed.
+  - `server.py`: ML time model for both routes, `time_basis` in route
+    JSON, unknown vessel → 400, simulation hours from the new fields.
+  - `src/evaluate.py` and `app.py` (Streamlit): ML time model for both
+    routes; Streamlit label "Est. time (ML speed model)".
+  - `web/app.js`: card label "est. hours (ML)".
+  - `data/processed/evaluation.csv`: regenerated (hours corrected; timing
+    columns re-measured).
+  - Tests: `test_routing.py`, `test_rerouting.py`, `test_server.py`.
+  - Docs: Source of Truth §10.1 and status, `README.md`, `DOCKER.md`,
+    loop-engineering records.
+- **Not changed:** route selection (all distances, explored cells and
+  wave/coast metrics identical), rerouting thresholds and decisions,
+  simulation results, dependencies, Docker files.
+
+---
+
+## 2026-10-03 — Loop 006: dynamic rerouting in the Flask UI
+
+- **Added:** `POST /api/simulate` (`server.py`); a "Voyage simulation"
+  mode in `web/index.html`, `web/app.js` and `web/style.css`;
+  `tests/test_server.py` (8 tests).
+- **Changed:** `src/rerouting.py` (`compare_voyage`, `config_from_dict`,
+  `cost_hours`, `VoyageResult.sailed_km`; CLI uses `compare_voyage`, same
+  output); `src/weather_sim.py` (`peak_change`); `/api/meta` (added a
+  `simulation` key); docs (`README.md`, `DOCKER.md`, Source of Truth
+  status, loop-engineering records).
+- **Not changed:** routing algorithms, `/api/route`, route-planning UI
+  behavior, Streamlit app, dependencies, Docker files.
+
+---
+
+## 2026-10-03 — Loop 005: documentation synchronization
+
+Documentation only; no code, tests, configuration or dependencies
+changed.
+
+- `docs/loop-engineering/`: `README.md` (navigation, reading order,
+  maintenance convention), `PROJECT_STATE.md` and `TASKS.md` rewritten
+  for the current state (previous versions in git at `79f130b`).
+  `BLOCKERS.md` restructured (C1–C8). `DECISIONS.md` gained 004–009, with
+  001 marked superseded. `EXPERIMENTS.md` gained EXP-002/003. Loop
+  003–005 records added to `LOOP_LOG.md` / `VALIDATION.md`.
+- `docs/Source_Of_Truth.md`: status line, §5.7 (implemented rerouting),
+  §14 maintenance pointer, §16 phase status markers.
+- `DOCKER.md`: removed references to the old Source of Truth's
+  production-image plan and "Phase 2"; added the offline test command.
+- `README.md`: rerouting added to the feature list.
+
+---
+
+## 2026-10-03 — Loop 004: weather-driven dynamic rerouting (`e8f68d1`)
+
+- **Added:** `src/weather_sim.py`, `src/rerouting.py`,
+  `tests/test_rerouting.py` (15 tests).
+- **Changed:** `config.py` (`REROUTE_*` defaults), `README.md` (rerouting
+  and tests sections), `docs/Source_Of_Truth.md` §15 (Dynamic Routing
+  limitations).
+- **Not changed:** `src/routing.py`, initial-route behavior,
+  `evaluation.csv`, UIs, dependencies.
+
+---
+
+## 2026-10-03 — Loop 003: current-position rerouting (`6fdfd91`)
+
+- **Changed:** `src/routing.py` — start/goal validation (`ValueError`),
+  `RouteResult.cost`, `Router.path_cost`. `README.md` — tests section.
+- **Added:** `tests/__init__.py`, `tests/test_routing.py` (8 tests).
+- **Same commit:** the user's rewrite of `docs/Source_Of_Truth.md`
+  (direction changed to ML-assisted dynamic rerouting; about 2,000 lines
+  replaced by about 780).
+- **Not changed:** search algorithm, route results for valid inputs
+  (`evaluation.csv` identical), UIs, dependencies.
+
 ---
 
 ## 2026-10-02 — Minor: organize Docker files into `docker/`
