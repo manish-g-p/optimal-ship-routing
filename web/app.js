@@ -313,7 +313,8 @@ function card(name, tag, cls, res) {
   if (!res || !res.found)
     return `<div class="card ${cls}"><div class="card-title"><b>${name}</b>
       <span>${tag}</span></div><div class="metric"><div class="v">—</div>
-      <div class="k">no safe route</div></div></div>`;
+      <div class="k">no safe route</div></div>
+      ${res && res.reason ? `<p class="plan-line">${esc(res.reason)}</p>` : ""}</div>`;
   return `<div class="card ${cls}">
     <div class="card-title"><b>${name}</b><span>${tag}</span></div>
     <div class="metrics">
@@ -381,6 +382,7 @@ function initSimControls() {
   $("cfg-cooldown").value = d.cooldown_steps;
   $("cfg-gain").value = +(100 * d.min_gain).toFixed(2);
   $("cfg-swh").value = d.swh_trigger_m;
+  $("cfg-dev").value = d.deviation_penalty;
   $("cfg-hint").textContent =
     `1 step = ${d.cells_per_step} grid cells (≈${Math.round(d.cells_per_step * 5.5)} km). ` +
     `Also requires ≥ ${d.min_gain_abs} cost units of gain.`;
@@ -574,8 +576,9 @@ const lab = {
   sid: null, state: null, running: false, loop: false, busy: false,
   queue: Promise.resolve(), selected: null, placing: false,
   drawn: { routeKey: null, weatherKey: null, overlayUrl: null },
-  objs: { initial: null, active: null, track: null, vessel: null, ends: [],
-          rMarkers: [], circles: [], overlay: null },
+  objs: { initial: null, active: null, prev: null, track: null, vessel: null, ends: [],
+          rMarkers: [], circles: [], overlay: null, safety: null },
+  shownTrack: 0, anim: null,
   lastSeq: 0, presets: [], limits: null, clickListener: null, resetArmed: null,
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -597,6 +600,7 @@ async function bindLab() {
   $("lab-step").addEventListener("click", () => labStepOnce());
   $("lab-reset").addEventListener("click", labReset);
   $("lab-routine").addEventListener("change", () => labRenderTimeline(true));
+  $("lab-safety").addEventListener("change", () => { if (lab.state && mode === "lab") labSafety(); });
   $("dist-place").addEventListener("click", () => {
     lab.placing = !lab.placing;
     $("dist-place").classList.toggle("armed", lab.placing);
@@ -661,7 +665,7 @@ function labConfig() {
     base_weather: scenario, preset: $("lab-preset").value,
     rerouting_enabled: $("lab-rerouting").checked,
     config: { cooldown_steps: num("cfg-cooldown"), min_gain: num("cfg-gain") / 100,
-              swh_trigger_m: num("cfg-swh") },
+              swh_trigger_m: num("cfg-swh"), deviation_penalty: num("cfg-dev") },
   };
 }
 
@@ -683,6 +687,8 @@ async function labCreate(thenRun) {
     if (thenRun) labStart();
   } catch (e) {
     toast("Could not start voyage: " + e.message);
+    if (!lab.sid) $("lab-metrics").innerHTML =
+      `<div class="sim-note" style="grid-column: span 3"><b>Voyage not started.</b> ${esc(e.message)}</div>`;
   } finally { loading(false); }
 }
 
@@ -819,20 +825,18 @@ function labDraw(fit) {
       o.track = new google.maps.Polyline({ map, geodesic: true, strokeColor: "#34d399",
         strokeOpacity: 1, strokeWeight: 5, zIndex: 3 });
     }
+    if (!o.prev) o.prev = new google.maps.Polyline({ map, geodesic: true, strokeOpacity: 0,
+      zIndex: 2, icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 0.95, scale: 3,
+                               strokeColor: "#f59e0b" }, offset: "0", repeat: "10px" }] });
     o.initial.setPath(st.routes.initial.map(toLL));
     o.active.setPath(st.routes.active.map(toLL));
+    o.prev.setPath((st.routes.previous || []).map(toLL));
     o.ends.forEach((m) => m.setMap(null));
     o.ends = [["Origin", st.origin, "#34d399", SHIP_PATH], ["Destination", st.dest, "#f43f5e", ANCHOR_PATH]]
       .map(([t, p, c, path]) => new google.maps.Marker({ position: toLL(p), map, title: t,
         zIndex: 999, icon: badgeIcon(path, c) }));
   }
-  o.track.setPath(st.track.map(toLL));
-  const icon = { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 6,
-    fillColor: "#ffffff", fillOpacity: 1, strokeColor: "#0b1220", strokeWeight: 1.5,
-    rotation: st.vessel.heading_deg };
-  if (!o.vessel) o.vessel = new google.maps.Marker({ map, zIndex: 1002,
-    title: "Simulated vessel position", icon });
-  o.vessel.setPosition(toLL(st.vessel.position)); o.vessel.setIcon(icon);
+  labMoveVessel(st);
   if (o.rMarkers.length !== st.reroutes.length) {
     o.rMarkers.forEach((m) => m.setMap(null));
     o.rMarkers = st.reroutes.map((r) => {
@@ -848,6 +852,7 @@ function labDraw(fit) {
   const weatherKey = JSON.stringify([w.applied, w.pending, lab.selected]);
   if (lab.drawn.weatherKey !== weatherKey) { lab.drawn.weatherKey = weatherKey; labDrawCircles(); }
   labSyncOverlay();
+  labSafety();
   if (fit) {
     const b = new google.maps.LatLngBounds();
     st.routes.initial.forEach((p) => b.extend(toLL(p)));
@@ -899,12 +904,67 @@ function labSyncOverlay() {
 
 function labClearMap() {
   if (info) info.close();                   // no stale popups from an old voyage
+  if (lab.anim) { cancelAnimationFrame(lab.anim); lab.anim = null; }
   const o = lab.objs;
-  [o.initial, o.active, o.track, o.vessel, o.overlay, ...o.ends, ...o.rMarkers, ...o.circles]
-    .forEach((x) => x && x.setMap(null));
-  lab.objs = { initial: null, active: null, track: null, vessel: null, ends: [],
-               rMarkers: [], circles: [], overlay: null };
+  [o.initial, o.active, o.prev, o.track, o.vessel, o.overlay, o.safety, ...o.ends,
+   ...o.rMarkers, ...o.circles].forEach((x) => x && x.setMap(null));
+  lab.objs = { initial: null, active: null, prev: null, track: null, vessel: null, ends: [],
+               rMarkers: [], circles: [], overlay: null, safety: null };
   lab.drawn = { routeKey: null, weatherKey: null, overlayUrl: null };
+  lab.shownTrack = 0;
+}
+
+/* Move the vessel along the cells the BACKEND reports as sailed (no turn or
+   speed model of our own): new track points are revealed progressively, so
+   the marker never jumps off the sailed track. */
+function labMoveVessel(st) {
+  const o = lab.objs, pts = st.track.map(toLL);
+  if (!o.track) o.track = new google.maps.Polyline({ map, geodesic: true,
+    strokeColor: "#34d399", strokeOpacity: 1, strokeWeight: 5, zIndex: 3 });
+  const icon = (rot) => ({ path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 6,
+    fillColor: "#ffffff", fillOpacity: 1, strokeColor: "#0b1220", strokeWeight: 1.5,
+    rotation: rot });
+  if (!o.vessel) o.vessel = new google.maps.Marker({ map, zIndex: 1002,
+    title: "Simulated vessel position", icon: icon(st.vessel.heading_deg) });
+  if (lab.anim) { cancelAnimationFrame(lab.anim); lab.anim = null; }
+  const from = lab.shownTrack;
+  const finish = () => {
+    o.track.setPath(pts);
+    o.vessel.setPosition(toLL(st.vessel.position));
+    o.vessel.setIcon(icon(st.vessel.heading_deg));
+    lab.shownTrack = pts.length;
+  };
+  if (from < 1 || pts.length <= from || pts.length - from > 400) return finish();
+  const dur = Math.max(150, Math.min(700, 0.8 * Number($("lab-speed").value)));
+  const t0 = performance.now(), n = pts.length - 1;
+  const frame = (now) => {
+    // rAF timestamps can precede t0 slightly: clamp so the index stays valid
+    const f = Math.max(0, Math.min(1, (now - t0) / dur));
+    const pos = (from - 1) + f * (n - (from - 1));      // index along the track
+    const i = Math.max(0, Math.min(n - 1, Math.floor(pos))), u = Math.min(1, Math.max(0, pos - i));
+    const a = pts[i], b = pts[i + 1];
+    const p = { lat: a.lat + (b.lat - a.lat) * u, lng: a.lng + (b.lng - a.lng) * u };
+    o.track.setPath(pts.slice(0, i + 1).concat([p]));
+    o.vessel.setPosition(p);
+    o.vessel.setIcon(icon(google.maps.geometry.spherical.computeHeading(a, b)));
+    if (f < 1) lab.anim = requestAnimationFrame(frame); else { lab.anim = null; finish(); }
+  };
+  lab.anim = requestAnimationFrame(frame);
+}
+
+function labSafety() {
+  const st = lab.state, o = lab.objs;
+  const want = $("lab-safety").checked && mode === "lab" && st;
+  if (!want) { if (o.safety) o.safety.setMap(null); return; }
+  const url = `/api/safety_image?vessel=${encodeURIComponent(st.setup.vessel)}`;
+  if (!o.safety || o.safety.get("src") !== url) {
+    if (o.safety) o.safety.setMap(null);
+    o.safety = new google.maps.GroundOverlay(url, { north: META.region.lat_max,
+      south: META.region.lat_min, east: META.region.lon_max, west: META.region.lon_min },
+      { opacity: 0.9, clickable: false });
+    o.safety.set("src", url);
+  }
+  o.safety.setMap(map);
 }
 
 function labEnter() {
@@ -989,7 +1049,11 @@ function labRenderPanel() {
     $("lab-weather-badge").classList.add("hidden");
     return;
   }
-  const m = st.metrics, c = st.comparison_no_rerouting;
+  const m = st.metrics, c = st.comparison_no_rerouting, k = st.constraints;
+  $("lab-constraints").innerHTML = k ? `Safety constraints: depth ≥ <b>${k.min_depth_m} m</b>
+    (draft + under-keel margin) · ≥ ${k.coastal_clearance_km} km from land/shoals ·
+    coastal preference ${k.coast_penalty} · route-change penalty
+    ${st.reroute_config.deviation_penalty}` : "";
   const cell = (v, k) => `<div><div class="v">${v}</div><div class="k">${k}</div></div>`;
   $("lab-metrics").innerHTML =
     cell(st.step, "step") + cell(Math.round(100 * m.progress) + "%", "progress") +

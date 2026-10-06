@@ -93,7 +93,7 @@ def waypoints(weather, res, every=12):
 
 def result_json(weather, res):
     if not res.found:
-        return {"found": False}
+        return {"found": False, "reason": res.reason}
     mx, mean = route_waves(weather, res)
     min_coast = round(float(min(DIST_COAST[r, c] for r, c in res.cells)), 1)
     return {
@@ -193,6 +193,32 @@ def _swh_png(swh, vmax):
     return buf.getvalue()
 
 
+_safety_png = {}
+
+
+@app.route("/api/safety_image")
+def safety_image():
+    """PNG: water inside the navigable grid that is too shallow for this
+    vessel (depth < vessel.required_depth_m) in red. Same bounds as the
+    wave overlay."""
+    name = request.args.get("vessel", V.DEFAULT_VESSEL)
+    if name not in V.VESSELS:
+        return jsonify({"error": "Unknown vessel."}), 400
+    if name not in _safety_png:
+        need = V.required_depth_m(V.get(name))
+        shallow = GRID.navigable & (-GRID.elevation < need)
+        rgba = np.zeros(shallow.shape + (4,), dtype=np.float32)
+        rgba[shallow] = (0.94, 0.25, 0.37, 0.75)
+        buf = io.BytesIO()
+        mpimg.imsave(buf, np.flipud(rgba), format="png")
+        _safety_png[name] = (buf.getvalue(), int(shallow.sum()), round(need, 1))
+    png, n, need = _safety_png[name]
+    resp = send_file(io.BytesIO(png), mimetype="image/png")
+    resp.headers["X-Restricted-Cells"] = str(n)
+    resp.headers["X-Required-Depth-M"] = str(need)
+    return resp
+
+
 @app.route("/api/route", methods=["POST"])
 def api_route():
     body = request.get_json(force=True)
@@ -229,15 +255,19 @@ def api_route():
     # Travel time of every route is estimated with the ML speed model for
     # this vessel and weather, whatever objective selected the route.
     mult = get_multiplier(scenario, vessel_name, weather)
-    timing = {"speed_kn": V.get(vessel_name).service_speed_kn, "time_mult": mult}
+    ves = V.get(vessel_name)
+    timing = {"speed_kn": ves.service_speed_kn, "time_mult": mult,
+              "min_depth_m": V.required_depth_m(ves)}      # hard depth constraint
     if "dijkstra" in algos:
         rd = R.Router(GRID, **timing).search(start, goal, False, False)
         out["dijkstra"] = result_json(weather, rd)
     if "astar" in algos:
         if use_ml:
-            router = R.Router(GRID, weather=weather, mult_dir=mult, **timing)
+            router = R.Router(GRID, weather=weather, mult_dir=mult,
+                              coast_penalty=C.COAST_PENALTY, **timing)
         else:
-            router = R.Router(GRID, weather=weather, **timing)
+            router = R.Router(GRID, weather=weather,
+                              coast_penalty=C.COAST_PENALTY, **timing)
         ra = router.search(start, goal, True, True)
         out["astar"] = result_json(weather, ra)
 
@@ -441,7 +471,9 @@ def sim_create():
     base = get_weather(base_name)
     mult = get_multiplier(base_name, vessel_name, base)          # cached
     base_router = R.Router(GRID, weather=base, mult_dir=mult,
-                           speed_kn=ves.service_speed_kn, time_mult=mult)
+                           speed_kn=ves.service_speed_kn, time_mult=mult,
+                           min_depth_m=V.required_depth_m(ves),
+                           coast_penalty=C.COAST_PENALTY)
     setup = {"origin": origin, "dest": dest, "vessel": vessel_name,
              "base_weather": base_name, "preset": preset,
              "rerouting_enabled": enabled,

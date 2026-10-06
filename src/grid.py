@@ -20,11 +20,14 @@ _CONN8 = np.ones((3, 3), dtype=int)
 
 
 class Grid:
-    def __init__(self, lats, lons, elevation, navigable):
+    def __init__(self, lats, lons, elevation, navigable, dist_to_barrier_km=None):
         self.lats = lats                      # 1D, ascending (south->north)
         self.lons = lons                      # 1D, ascending (west->east)
-        self.elevation = elevation            # 2D (nlat, nlon), metres
+        self.elevation = elevation            # 2D (nlat, nlon), metres vs MSL
         self.navigable = navigable            # 2D bool
+        # km to the nearest "barrier" cell (land or water shallower than
+        # MIN_DEPTH_M); None if unknown
+        self.dist_to_barrier_km = dist_to_barrier_km
         self.nlat, self.nlon = navigable.shape
 
         # Restrict port-snapping to the MAIN connected ocean body, so a
@@ -89,19 +92,31 @@ def build_grid():
         C.GRID_FILE,
         lats=lats, lons=lons, elevation=elevation,
         navigable=navigable, dist_to_coast_km=dist_km.astype(np.float32),
+        min_depth_m=np.float32(C.MIN_DEPTH_M),
     )
     n = int(navigable.sum())
     print(f"[grid] navigable cells: {n} / {navigable.size} "
           f"({100*n/navigable.size:.1f}%)  saved {C.GRID_FILE.name}")
-    return Grid(lats, lons, elevation, navigable)
+    return Grid(lats, lons, elevation, navigable, dist_km.astype(np.float32))
 
 
 def load_grid():
-    """Load the cached grid, building it if needed."""
+    """Load the cached grid, building it if needed.
+
+    The navigable mask is recomputed from the cached elevation and
+    distance-to-barrier fields with the CURRENT config.MIN_DEPTH_M /
+    COAST_BUFFER_KM, so the clearance policy is configurable without a
+    rebuild (the distance field is rebuilt only if MIN_DEPTH_M changed).
+    """
     if not C.GRID_FILE.exists():
         return build_grid()
     g = np.load(C.GRID_FILE)
-    return Grid(g["lats"], g["lons"], g["elevation"], g["navigable"])
+    built_depth = float(g["min_depth_m"]) if "min_depth_m" in g else 10.0
+    if built_depth != C.MIN_DEPTH_M:
+        return build_grid()
+    dist = g["dist_to_coast_km"]
+    navigable = (g["elevation"] <= -C.MIN_DEPTH_M) & (dist >= C.COAST_BUFFER_KM)
+    return Grid(g["lats"], g["lons"], g["elevation"], navigable, dist)
 
 
 if __name__ == "__main__":
