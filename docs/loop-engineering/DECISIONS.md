@@ -26,6 +26,8 @@ current Source of Truth (2026-10-03).
 | 011 | Metric semantics: distance / cost / travel time; ML time model for all routes | **Confirmed** |
 | 012 | Rerouting evaluation design (matrix, pairing, statuses, outcome tolerance, outputs) | **Confirmed** |
 | 013 | Simulation lab: stepper engine, in-memory sessions, pending/applied weather semantics | **Confirmed** |
+| 014 | Navigational safety: hard depth (draft + 20% UKC) and clearance constraints everywhere; explicit infeasible outcomes; soft coastal preference off | **Confirmed** |
+| 015 | Reroute geometry: similar-benefit route-change penalty (0.10, tol 1%); record shift/turn/cause; no turn-rate model | **Confirmed** |
 
 ---
 
@@ -300,6 +302,52 @@ floors speed at service ÷ 4, about the model's own minimum prediction.
 - Existing `/api/route`, `/api/meta` and `/api/simulate` are unchanged; the
   replay mode is only relabelled "Voyage replay". Rerouting thresholds are
   unchanged.
+
+## Decision 014 — Navigational safety constraints — CONFIRMED
+
+**Decision (Loop 010):**
+
+- **Depth (hard, per vessel).** Every route cell needs depth ≥ draft ×
+  (1 + `UKC_FRACTION`), with UKC 0.20 (`vessel.required_depth_m`,
+  `Router(min_depth_m=…)`). It is applied to initial routes, alternatives
+  (the controller validates against the vessel's mask), evaluation, the
+  simulation, `/api/route`, Streamlit and the lab.
+- **Coastal clearance (hard, all vessels).** `COAST_BUFFER_KM` (22 km)
+  from land or water shallower than 10 m, recomputed at grid load, so it is
+  configurable. Clearance and depth are separate concepts with separate
+  settings.
+- **Infeasible outcomes.** `found=False` with a `reason`;
+  `rerouting.InfeasibleRoute`; HTTP 422 in the lab and replay; status
+  `infeasible` in the evaluation. Never an unsafe fallback. Errors in the
+  grid itself (outside the grid, cell not navigable at all) still raise.
+- **Soft coastal preference** (`COAST_PENALTY`): implemented, opt-in per
+  Router, **default 0**. It applies only to weather-aware A*; Dijkstra
+  stays pure distance.
+
+**Why:** EXP-008. Draft was unenforced; one route was unsafe for two
+vessels. The soft preference reduced edge-hugging but raised rough-weather
+wave exposure (mean peak 3.07 → 3.33 m at 0.10) and time (+1.1%).
+
+## Decision 015 — Reroute geometry and route-change preference — CONFIRMED
+
+**Decision (Loop 010):**
+
+- `RerouteConfig.deviation_penalty` (0.10), `deviation_scale_km` (100) and
+  `deviation_tol` (0.01). When the penalty is > 0, the controller searches
+  both the best alternative and a penalised nearby one, and uses the nearby
+  one only if its **true** cost is within 1% of the best. Adoption always
+  compares true costs.
+- Each adoption records `alternative_kind`, `corridor_shift_km`,
+  `length_change_km` and `heading_change_deg`. The voyage keeps the
+  replaced plan (`Voyage.previous_plan`) for display.
+- **No turn-rate model (Phase 4 not implemented).** Movement stays on the
+  route cells; the browser animates only along backend-sailed cells.
+
+**Why:** EXP-008. A naive penalty blocked useful reroutes and lost
+0.6–3 h of mean benefit. The similar-benefit rule kept the benefit and
+trimmed the median corridor shift (311 → 275 km). Measured heading changes
+at 55 km steps are physically feasible, so a manoeuvring model would add no
+realism.
 
 ## Unresolved choices
 

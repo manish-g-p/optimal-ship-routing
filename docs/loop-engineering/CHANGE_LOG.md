@@ -9,6 +9,42 @@ Truth; see `README.md` for how to read their "§" references.
 
 ---
 
+## 2026-10-06 — Loop 010: navigational safety and rerouting realism
+
+- **Added:** `tests/test_safety.py` (19 tests); `/api/safety_image`.
+- **Changed:**
+  - `config.py`: `UKC_FRACTION`, `COAST_SOFT_KM`, `COAST_PENALTY` (0), and
+    `REROUTE_DEVIATION_*` (0.10 / 100 km / 1%).
+  - `src/grid.py`: clearance applied at load; `dist_to_barrier_km`.
+  - `src/vessel.py`: `required_depth_m`.
+  - `src/routing.py`: `min_depth_m`, `coast_penalty`, `extra_cost`, and
+    `RouteResult.reason`; infeasible outcomes.
+  - `src/rerouting.py`: `InfeasibleRoute`; vessel-mask candidate
+    validation; similar-benefit route-change preference; adoption geometry;
+    `Voyage.previous_plan`; the factory enforces constraints.
+  - `src/evaluate.py` and `app.py`: depth constraint.
+  - `src/evaluate_rerouting.py`: `infeasible` status; event geometry
+    columns.
+  - `src/sim_session.py`: 422 for infeasible voyages; previous plan,
+    constraints and cause in state.
+  - `server.py`: constraints wired in; `reason` in route JSON; safety
+    image.
+  - `web/`: replaced-plan line, map key, safety overlay, vessel animation
+    along sailed cells, route-change setting, infeasible messages.
+  - `tests/test_evaluate_rerouting.py`: VLCC Kandla → Cochin is now
+    `infeasible`.
+  - `tools/lab_e2e.mjs` and `tools/lab_parity.py`: new checks and cases.
+  - `data/processed/evaluation.csv`: regenerated; only Dijkstra
+    explored-cell counts (−1/−2) and timing changed.
+  - `data/rerouting_eval/`: regenerated (EXP-009).
+  - Docs: Source of Truth (§5.3, §5.7, §10.1, §12.1, §15), `README.md`,
+    loop-engineering records.
+- **Not changed:** routing algorithms, the travel-time model, rerouting
+  thresholds (wave/cost triggers, min gain, cooldown), API contracts
+  (only additive fields and a 422 for infeasible lab/replay requests).
+
+---
+
 ## 2026-10-03 — Loop 009: interactive Simulation lab
 
 - **Added:** `src/sim_session.py`; `tests/test_sim_session.py` (20 tests);

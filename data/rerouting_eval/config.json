@@ -1,5 +1,5 @@
 {
-  "code_version": "e7597a1+uncommitted",
+  "code_version": "ee4da2b+uncommitted",
   "base_weather": "typical",
   "scenarios": [
     "stable",
@@ -33,7 +33,10 @@
     "cost_trigger": 0.05,
     "recheck_steps": 4,
     "min_gain": 0.03,
-    "min_gain_abs": 20.0
+    "min_gain_abs": 20.0,
+    "deviation_penalty": 0.1,
+    "deviation_scale_km": 100.0,
+    "deviation_tol": 0.01
   },
   "cost_model": "A* with ML speed multiplier; travel time from the same ML speed model (Source of Truth 10.1)",
   "outcome_tolerance_hours": 0.1,

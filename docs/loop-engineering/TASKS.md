@@ -11,8 +11,8 @@ Status values: `DONE`, `NEXT` (proposed or confirmed), `BACKLOG`,
 
 ## Current goal
 
-None in progress. The last implementation goal (interactive Simulation
-lab, Loop 009) is `DONE`.
+None in progress. The last implementation goal (navigational safety and
+reroute realism, Loop 010) is `DONE`.
 
 ## Next goal — `NEXT` (proposed, needs user confirmation)
 
@@ -33,6 +33,23 @@ Candidates, in suggested order. None is decided by the user.
 ---
 
 ## Completed goals
+
+### Navigational safety and dynamic-rerouting realism — `DONE`
+
+Loop 010, 2026-10-06 (uncommitted when written).
+
+- Diagnosis: EXP-008 A/B.
+- Vessel depth feasibility (draft + 20% UKC), configurable coastal
+  clearance and explicit infeasible outcomes, used everywhere
+  (Decision 014). The soft coastal preference is implemented but off,
+  with evidence.
+- Similar-benefit route-change preference and reroute geometry recording
+  (Decision 015); no turn-rate model (not justified).
+- Lab: replaced plan, safety overlay, vessel moving only along sailed
+  cells, constraint and cause display, infeasible messages.
+
+Evidence: `tests/test_safety.py`, `tools/lab_e2e.mjs` (36 checks),
+EXP-008, EXP-009, `VALIDATION.md` → Loop 010.
 
 ### Interactive weather and rerouting Simulation lab (Phase 4 extension) — `DONE`
 

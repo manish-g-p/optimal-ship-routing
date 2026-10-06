@@ -14,6 +14,8 @@ experiments are listed at the end and have **no results**.
 | EXP-005 | Travel-time / ETA correction | Complete (Loop 007) |
 | EXP-006 | Rerouting evaluation: 5 voyages × 5 vessels × 6 scenarios | Complete (Loop 008) |
 | EXP-007 | Simulation lab: engine parity, host vs. Docker, performance | Complete (Loop 009) |
+| EXP-008 | Safety and reroute-geometry diagnosis; coastal and route-change penalties | Complete (Loop 010) |
+| EXP-009 | Rerouting evaluation re-run with safety constraints (vs. EXP-006) | Complete (Loop 010) |
 
 The field list used for EXP-001 (Scenario, Start, Destination, Vessel,
 Weather, Algorithms, Constraints, Metrics, Results, Observations,
@@ -481,6 +483,89 @@ message, decision detail and metric; only session ids were excluded.
 Session state response: 30–55 KB per request (routes + track ≈ 21 KB,
 timeline ≤ 32 KB). Disturbed cost grid: 16.5 MB each, ≤ 2 per session.
 Server process max RSS in the measurement script: 625 MB.
+
+---
+
+## EXP-008 — Safety and reroute-geometry diagnosis, penalty comparisons
+
+**Status:** Complete. Loop 010, 2026-10-06. Scripts were run ad hoc; the
+results are below and the code paths are covered by `tests/test_safety.py`.
+
+### A. Coastal proximity and depth (before changes)
+
+- **Grid:** 540 × 1000 cells of 0.05° (5.6 km N–S × 5.4 km E–W). 62.4%
+  navigable. Navigable means ≥ 10 m deep **and** ≥ 22 km from land or
+  water shallower than 10 m. Depth is the shallowest point per block
+  (conservative), relative to MSL.
+- **Routes ride the clearance edge.** Share of route cells 22–30 km from a
+  barrier (A* + ML, General Cargo, typical weather): Mumbai → Chennai 62%,
+  Kandla → Cochin 80%, Visakhapatnam → Colombo 32%, Chennai → Port Blair
+  14%, Cochin → Dubai 5%. Minimum distance to land is always ≥ 22.2 km. The
+  mask was never violated, so this is **cost-function** behaviour: shortest
+  and fastest paths follow the constraint boundary.
+- **Visualization is not the cause:** the route/replay view's Chaikin
+  smoothing moves the line at most 3.4 km.
+- **Draft was not enforced.** With a 20% under-keel margin, Kandla → Cochin
+  (16 m minimum) is unsafe for the Container Ship (needs 17.4 m) and the
+  VLCC (24.6 m). Navigable cells shallower than the requirement: 0.00%
+  (General Cargo) to 0.31% (VLCC).
+- **Port snapping:** Kandla 141 km, Mundra 100 km, Haldia 83 km and Mumbai
+  44 km from the port coordinate to the nearest navigable cell.
+
+### B. Reroute geometry (before changes; General Cargo, typical)
+
+- **Continuity:** every adopted route starts at the vessel's cell, and the
+  track has no jumps.
+- **Small storm (σ 60 km, +4 m) on Cochin → Dubai:** 1 reroute, 6.1% gain;
+  the new route is up to **178 km** from the old plan (+18 km).
+- **Large storm (σ 300 km, +6 m):** 33.6% gain; shift 461 km (+269 km).
+- **19 adoptions (3 voyages × adverse / worsening / improving_alt /
+  shifting):**
+  - turn at the reroute point vs. incoming heading: median 19°, max 136°
+    (one > 90°: Visakhapatnam → Colombo `shifting`, +372 km for 8.3%);
+  - corridor shift: median 242 km, max 516 km.
+- **Conclusion:** abrupt reroutes are a *decision* property (global
+  optimum, no preference for the current corridor), not a movement
+  discontinuity. A turn-rate model (Phase 4) is not justified, because a
+  136° heading change over a 55 km step is physically feasible.
+
+### C. Coastal preference (5 voyages, A* + ML, depth constraint on)
+
+| Weather | Penalty | km | hours | edge % | mean peak wave m |
+| --- | --- | --- | --- | --- | --- |
+| typical (General Cargo) | 0 | 10816 | 387.9 | 38.5 | 1.67 |
+| | 0.05 | 10819 | 389.3 | 12.3 | 1.69 |
+| | 0.10 | 10820 | 389.7 | 11.3 | 1.69 |
+| | 0.25 | 10946 | 394.9 | 4.8 | 1.72 |
+| rough (General Cargo) | 0 | 11127 | 449.5 | 51.1 | 3.07 |
+| | 0.05 | 10970 | 450.9 | 25.5 | 3.30 |
+| | 0.10 | 10980 | 454.6 | 13.9 | 3.33 |
+| | 0.25 | 11088 | 462.2 | 6.6 | 3.35 |
+
+Hard depth only (penalty 0) changes nothing for General Cargo, and makes
+Kandla → Cochin infeasible for the Container Ship and VLCC. **Decision:**
+the penalty stays **off** (Decision 014). In rough weather every weight
+raised wave exposure, because near-shore water is often the sheltered water.
+
+### D. Route-change penalty (5 voyages × General Cargo × adverse / worsening / improving_alt / shifting / minor; final config)
+
+| Variant | Reroutes | improved / unchanged / worsened | mean Δh | corridor shift median / max km | turns > 90° | small storm | large storm |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| no penalty | 30 | 19 / 5 / 1 | −11.58 | 311 / 516 | 3 | 178 km, 6.1%, −6.3 h | 461 km, 33.6%, −54.7 h |
+| naive 0.25 | 25 | 17 / 8 / 0 | −10.94 | 227 / 487 | 0 | **no reroute** | 419 km, 29.4%, −47.8 h |
+| naive 0.50 | 19 | 14 / 11 / 0 | −8.61 | 163 / 407 | 0 | **no reroute** | 391 km, 28.3%, −46.1 h |
+| similar-benefit 0.10, tol 1% | 30 | 19 / 5 / 1 | −11.56 | 275 / 516 | 3 | 178 km, 6.1%, −6.3 h | 461 km, 33.6%, −54.7 h |
+| similar-benefit 0.25, tol 1% | 29 | 19 / 5 / 1 | −11.51 | 310 / 516 | 3 | same | same |
+| similar-benefit 0.50, tol 1% | 29 | 19 / 5 / 1 | −11.42 | 317 / 516 | 3 | same | same |
+| similar-benefit 0.50, tol 3% | 30 | 19 / 5 / 1 | −11.49 | 311 / 516 | 3 | same | same |
+
+"Naive" means always taking the penalised alternative. It blocked useful
+reroutes (small storm) and gave up 0.6–3 h of mean benefit. An earlier run
+with the coastal preference at 0.10 showed the same pattern. The
+similar-benefit rule takes the nearby route only when its true cost is
+within the tolerance of the best route, and keeps all of the benefit.
+**Decision:** penalty 0.10, tolerance 1% (Decision 015). The effect is
+modest: median shift −36 km.
 
 ---
 
