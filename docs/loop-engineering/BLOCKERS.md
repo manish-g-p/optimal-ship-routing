@@ -168,6 +168,11 @@ simulation view). Google says `Marker` is not scheduled for removal. Not
 fixed: unrelated to rerouting. The Simulation lab also uses `Marker` (same
 notice); its own check found no other console errors (Loop 009).
 
+**Update (2026-10-06):** the favicon 404 is fixed. `web/favicon.svg` (the
+🧭 compass from the top bar) is linked from `index.html`, and the browser
+check no longer sees a `/favicon.ico` request. Browsers without SVG-favicon
+support (e.g. older Safari) may still show a default icon.
+
 ### C8 — Documentation risks
 
 - Pre-2026-10-03 records cite old Source of Truth section numbers

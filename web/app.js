@@ -583,47 +583,6 @@ const lab = {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function bindLab() {
-  try {
-    const d = await (await fetch("/api/sim/presets")).json();
-    lab.presets = d.presets; lab.limits = d.limits;
-    const sel = $("lab-preset");
-    d.presets.forEach((p) => sel.add(new Option(p.name.replace(/_/g, " "), p.name)));
-    sel.value = "none";
-    const info = () => { $("lab-preset-info").textContent =
-      (lab.presets.find((p) => p.name === sel.value) || {}).description || ""; };
-    sel.addEventListener("change", info); info();
-  } catch (e) { toast("Could not load simulation presets: " + e.message); }
-  $("lab-create").addEventListener("click", () => labCreate(false));
-  $("lab-start").addEventListener("click", labStart);
-  $("lab-pause").addEventListener("click", labPause);
-  $("lab-step").addEventListener("click", () => labStepOnce());
-  $("lab-reset").addEventListener("click", labReset);
-  $("lab-routine").addEventListener("change", () => labRenderTimeline(true));
-  $("lab-safety").addEventListener("change", () => { if (lab.state && mode === "lab") labSafety(); });
-  $("dist-place").addEventListener("click", () => {
-    lab.placing = !lab.placing;
-    $("dist-place").classList.toggle("armed", lab.placing);
-    $("dist-place").textContent = lab.placing ? "Click the map…" : "＋ Place on map";
-  });
-  $("dist-add").addEventListener("click", () => {
-    const d = labFormDisturbance(true); if (d) labEditWeather([...labWorkList(), d]);
-  });
-  $("dist-update").addEventListener("click", () => {
-    const d = labFormDisturbance(true); if (!d || !lab.selected) return;
-    labEditWeather(labWorkList().map((x) => x.id === lab.selected ? { ...x, ...d } : x));
-  });
-  $("dist-remove").addEventListener("click", () => {
-    if (!lab.selected) return;
-    labEditWeather(labWorkList().filter((x) => x.id !== lab.selected));
-    lab.selected = null;
-  });
-  $("weather-apply").addEventListener("click", () => labAction("weather/apply"));
-  $("weather-discard").addEventListener("click", () => labAction("weather/discard"));
-  $("schedule-cancel").addEventListener("click", () => labAction("schedule/cancel"));
-  labControls();
-}
-
 /* --- requests: strictly one at a time -------------------------------- */
 function labApi(method, path, body) {
   const run = async () => {
@@ -652,6 +611,7 @@ async function labHandleError(e, what) {
   toast(`${what}: ${e.message}`);
   if (e.status === 404) {                  // session expired / unknown
     labPause(); lab.sid = null; lab.state = null; labClearMap(); labRenderPanel();
+    labSyncOverlay();                      // fall back to the sea-state heatmap
   } else if (lab.sid && (e.status === 409 || e.status >= 500 || !e.status)) {
     try { labApply(await labApi("GET", `/api/sim/sessions/${lab.sid}`)); }
     catch (e2) { /* keep showing the last good state */ }
@@ -667,29 +627,6 @@ function labConfig() {
     config: { cooldown_steps: num("cfg-cooldown"), min_gain: num("cfg-gain") / 100,
               swh_trigger_m: num("cfg-swh"), deviation_penalty: num("cfg-dev") },
   };
-}
-
-async function labCreate(thenRun) {
-  if (scenario === "live")
-    return toast("The simulation uses offline weather: pick Typical or Rough.");
-  if ($("origin").value === $("dest").value)
-    return toast("Origin and destination are the same.");
-  labPause();
-  const old = lab.sid;
-  loading(true, "Planning the voyage…");
-  try {
-    const st = await labApi("POST", "/api/sim/sessions", labConfig());
-    if (old) labApi("DELETE", `/api/sim/sessions/${old}`).catch(() => {});
-    lab.sid = st.id; lab.lastSeq = 0; lab.selected = null;
-    lab.drawn = { routeKey: null, weatherKey: null, overlayUrl: null };
-    labClearMap();
-    labApply(st, true);
-    if (thenRun) labStart();
-  } catch (e) {
-    toast("Could not start voyage: " + e.message);
-    if (!lab.sid) $("lab-metrics").innerHTML =
-      `<div class="sim-note" style="grid-column: span 3"><b>Voyage not started.</b> ${esc(e.message)}</div>`;
-  } finally { loading(false); }
 }
 
 function labStart() {
@@ -763,38 +700,12 @@ function labWorkList() {
   return w ? (w.pending || w.applied).map((d) => ({ ...d })) : [];
 }
 
-function labFormDisturbance(needPos) {
-  const L = lab.limits || {};
-  const v = (id) => Number($(id).value);
-  const d = { delta_m: v("dist-delta"), radius_km: v("dist-radius") };
-  if (needPos) { d.lat = v("dist-lat"); d.lon = v("dist-lon"); }
-  for (const [k, x] of Object.entries(d)) {
-    const [lo, hi] = L[k] || [-Infinity, Infinity];
-    if ($(`dist-${k === "delta_m" ? "delta" : k === "radius_km" ? "radius" : k}`).value === "" ||
-        !Number.isFinite(x) || x < lo || x > hi) {
-      toast(`${k} must be a number between ${lo} and ${hi}.`); return null;
-    }
-  }
-  if (d.delta_m === 0) { toast("Δ wave height must not be 0."); return null; }
-  return d;
-}
-
 async function labEditWeather(list) {
   if (!lab.sid) return toast("Start a voyage first.");
   try {
     labApply(await labApi("POST", `/api/sim/sessions/${lab.sid}/weather`,
                           { disturbances: list }));
   } catch (e) { await labHandleError(e, "Weather change rejected"); }
-}
-
-function labMapClick(ev) {
-  if (mode !== "lab" || !lab.placing) return;
-  lab.placing = false;
-  $("dist-place").classList.remove("armed"); $("dist-place").textContent = "＋ Place on map";
-  $("dist-lat").value = ev.latLng.lat().toFixed(2);
-  $("dist-lon").value = ev.latLng.lng().toFixed(2);
-  const d = labFormDisturbance(true);
-  if (d) labEditWeather([...labWorkList(), d]);
 }
 
 /* --- state -> view ------------------------------------------------------ */
@@ -849,7 +760,7 @@ function labDraw(fit) {
     });
   }
   const w = st.weather;
-  const weatherKey = JSON.stringify([w.applied, w.pending, lab.selected]);
+  const weatherKey = JSON.stringify([w.applied, w.pending]);   // selection only restyles
   if (lab.drawn.weatherKey !== weatherKey) { lab.drawn.weatherKey = weatherKey; labDrawCircles(); }
   labSyncOverlay();
   labSafety();
@@ -862,7 +773,10 @@ function labDraw(fit) {
 
 function labDrawCircles() {
   const o = lab.objs, w = lab.state.weather;
-  o.circles.forEach((c) => c.setMap(null)); o.circles = [];
+  // Remove on the next tick: removing a circle in the same tick it was added
+  // makes the Maps API throw (seen when a new storm is auto-selected).
+  const old = o.circles; o.circles = [];
+  setTimeout(() => old.forEach((c) => c.setMap(null)), 0);
   const add = (d, pending) => {
     const storm = d.delta_m > 0;
     const color = storm ? "#a855f7" : "#34d399";
@@ -873,6 +787,7 @@ function labDrawCircles() {
       strokeColor: pending ? "#ffffff" : color, strokeOpacity: pending ? 0.95 : 0.8,
       strokeWeight: d.id === lab.selected ? 3 : pending ? 2 : 1,
       fillColor: color, fillOpacity: pending ? 0.04 : Math.min(0.35, 0.08 + 0.04 * Math.abs(d.delta_m)) });
+    c.__id = d.id; c.__pending = pending;
     c.addListener("click", () => labSelect(d.id));
     if (editable) c.addListener("dragend", () => {
       const p = c.getCenter();
@@ -883,23 +798,12 @@ function labDrawCircles() {
   };
   w.applied.forEach((d) => add(d, false));
   (w.pending || []).forEach((d) => add(d, true));
+  labStyleCircles();
 }
 
-function labSyncOverlay() {
-  const st = lab.state;
-  if (mode !== "lab" || !st) return;
-  if (waveOverlay) waveOverlay.setMap(null);     // base-scenario overlay is not the sim field
-  const url = st.weather.overlay.url;
-  if (lab.drawn.overlayUrl !== url) {
-    if (lab.objs.overlay) lab.objs.overlay.setMap(null);
-    lab.objs.overlay = new google.maps.GroundOverlay(url,
-      { north: META.region.lat_max, south: META.region.lat_min,
-        east: META.region.lon_max, west: META.region.lon_min }, { opacity: 0.6 });
-    lab.drawn.overlayUrl = url;
-  }
-  lab.objs.overlay.setMap($("use-waves").checked ? map : null);
-  $("legend-max").textContent = st.weather.overlay.legend_max_m + " m";
-  $("legend").classList.remove("hidden");
+function labStyleCircles() {           // selection highlight (UI state only)
+  lab.objs.circles.forEach((c) => c.setOptions({
+    strokeWeight: c.__id === lab.selected ? 3 : c.__pending ? 2 : 1 }));
 }
 
 function labClearMap() {
@@ -967,135 +871,7 @@ function labSafety() {
   o.safety.setMap(map);
 }
 
-function labEnter() {
-  $("lab-panel").classList.remove("hidden");
-  if (lab.state) labDraw(true);
-  labRenderPanel();
-}
-
-function labLeave() {
-  labPause();
-  lab.placing = false;
-  labClearMap();
-  if (lab.clickListener) { lab.clickListener.remove(); lab.clickListener = null; }
-  $("lab-panel").classList.add("hidden");
-  if (waveOverlay) waveOverlay.setMap($("use-waves").checked ? map : null);
-}
-
-function labSelect(id) {
-  lab.selected = lab.selected === id ? null : id;
-  const d = labWorkList().find((x) => x.id === lab.selected);
-  if (d) {
-    $("dist-delta").value = d.delta_m; $("dist-radius").value = d.radius_km;
-    $("dist-lat").value = d.lat; $("dist-lon").value = d.lon;
-  }
-  lab.drawn.weatherKey = null;
-  if (lab.state) { labDrawCircles(); labRenderPanel(); }
-}
-
-function labShowEvent(seq, fromMap = true) {
-  const e = lab.state && lab.state.timeline.find((x) => x.seq === seq);
-  if (!e) return;
-  if (e.position) {
-    map.panTo(toLL(e.position));
-    const d = e.detail || {};
-    info.setPosition(toLL(e.position));
-    info.setContent(`<div class="wx-pop"><b>Step ${e.step}: ${esc(d.decision || e.kind)}</b>` +
-      `${esc(e.message)}<br>${d.triggers ? "Triggers: " + esc(d.triggers.join("; ") || "none") : ""}</div>`);
-    info.open(map);
-  }
-  const el = document.querySelector(`.tl[data-seq="${seq}"]`);
-  if (el) {
-    if (fromMap) { el.classList.add("open"); labRenderTimeline(true); }
-    const again = document.querySelector(`.tl[data-seq="${seq}"]`);
-    if (again) again.scrollIntoView({ block: "nearest" });
-  }
-}
-
 /* --- panel ---------------------------------------------------------------- */
-function labControls() {
-  const st = lab.state, has = !!lab.sid && !!st;
-  const done = has && ["completed", "error"].includes(st.status);
-  $("lab-start").disabled = lab.running || done;
-  $("lab-start").textContent = !has ? "▶ Start" : st.step > 0 ? "▶ Resume" : "▶ Start";
-  $("lab-pause").disabled = !lab.running;
-  $("lab-step").disabled = !has || lab.running || lab.busy || lab.stepping || done;
-  $("lab-reset").disabled = !has;
-  const w = has ? st.weather : null;
-  const editable = has && !done;
-  ["dist-place", "dist-add"].forEach((id) => $(id).disabled = !editable);
-  $("dist-update").disabled = !editable || !lab.selected;
-  $("dist-remove").disabled = !editable || !lab.selected;
-  $("weather-apply").disabled = !editable || !w || !w.pending;
-  $("weather-discard").disabled = !has || !w || !w.pending;
-  $("schedule-cancel").disabled = !editable || !w || !w.schedule.length;
-  let status = "No voyage";
-  if (has) status = st.status === "completed" ? "Arrived"
-    : st.status === "error" ? "Error - reset" : lab.running ? "Running…"
-    : lab.busy ? "Working…" : st.step === 0 ? "Ready" : "Paused";
-  $("lab-status").textContent = has
-    ? `${status} · step ${st.step} · ${Math.round(100 * st.metrics.progress)}%` : status;
-  $("lab-progress-bar").style.width = has ? `${100 * st.metrics.progress}%` : "0";
-}
-
-function labRenderPanel() {
-  labControls();
-  const st = lab.state;
-  if (!st) {
-    $("lab-metrics").innerHTML = '<div class="plan-line" style="grid-column: span 3">' +
-      "Configure the voyage on the left, then <b>Start</b> or <b>New voyage</b>.</div>";
-    ["lab-compare", "lab-weather-status", "lab-dist-list", "lab-timeline"]
-      .forEach((id) => $(id).innerHTML = "");
-    $("lab-weather-badge").classList.add("hidden");
-    return;
-  }
-  const m = st.metrics, c = st.comparison_no_rerouting, k = st.constraints;
-  $("lab-constraints").innerHTML = k ? `Safety constraints: depth ≥ <b>${k.min_depth_m} m</b>
-    (draft + under-keel margin) · ≥ ${k.coastal_clearance_km} km from land/shoals ·
-    coastal preference ${k.coast_penalty} · route-change penalty
-    ${st.reroute_config.deviation_penalty}` : "";
-  const cell = (v, k) => `<div><div class="v">${v}</div><div class="k">${k}</div></div>`;
-  $("lab-metrics").innerHTML =
-    cell(st.step, "step") + cell(Math.round(100 * m.progress) + "%", "progress") +
-    cell(m.reroutes, "reroutes") +
-    cell(fmt(m.sailed_km), "km sailed") + cell(m.sailed_hours.toFixed(1), "h sailed") +
-    cell(m.remaining_hours.toFixed(1), "h remaining") +
-    cell(m.projected_total_hours.toFixed(1), "h projected") +
-    cell(fmt(m.remaining_route_cost), "route cost left") +
-    cell(st.status, "state");
-  const dh = m.projected_total_hours - c.projected_total_hours;
-  $("lab-compare").textContent = st.setup.rerouting_enabled
-    ? `Same voyage without rerouting, same weather: ${c.projected_total_hours.toFixed(1)} h ` +
-      `${c.arrived ? "(arrived)" : "projected"} → difference ${dh <= 0 ? "" : "+"}${dh.toFixed(1)} h.`
-    : "Rerouting is off for this voyage (the vessel keeps its initial route).";
-  const w = st.weather;
-  $("lab-weather-badge").classList.toggle("hidden", !w.pending);
-  const sched = w.schedule.length
-    ? ` · scheduled preset updates at step ${w.schedule.map((x) => x.step).join(", ")}` : "";
-  $("lab-weather-status").innerHTML =
-    `Base: <b>${esc(w.base_weather)}</b> · ${w.applied.length} applied disturbance(s)` +
-    `${w.pending ? `, <b>${w.pending.length} in pending list</b>` : ""}<br>` +
-    `Max wave on remaining route ${w.max_wave_on_remaining_route_m} m · field max ` +
-    `${w.field_max_wave_m} m<br>Last weather update: ${w.last_update_step == null ? "none"
-      : "step " + w.last_update_step} · next route evaluation: ${w.next_evaluation_step == null
-      ? "none" : "step " + w.next_evaluation_step}${esc(sched)}`;
-  const shown = w.pending || w.applied;
-  const appliedIds = new Set(w.applied.map((d) => JSON.stringify([d.id, d.lat, d.lon, d.radius_km, d.delta_m])));
-  $("lab-dist-list").innerHTML = shown.length ? shown.map((d) => {
-    const isApplied = appliedIds.has(JSON.stringify([d.id, d.lat, d.lon, d.radius_km, d.delta_m]));
-    return `<div class="dist ${d.delta_m < 0 ? "calm" : ""} ${d.id === lab.selected ? "selected" : ""}"
-      data-id="${esc(d.id)}"><span class="st ${isApplied ? "" : "pending"}">${isApplied ? "applied" : "pending"}
-      · ${esc(d.origin)}</span><b>${esc(d.id)}</b> ${d.delta_m > 0 ? "+" : ""}${d.delta_m} m,
-      σ ${d.radius_km} km<br>${d.lat.toFixed(2)}°N ${d.lon.toFixed(2)}°E</div>`;
-  }).join("") + (w.pending ? w.applied.filter((a) => !w.pending.some((p) => p.id === a.id))
-      .map((a) => `<div class="dist"><span class="st pending">removal pending</span>
-        <b>${esc(a.id)}</b> ${a.delta_m} m</div>`).join("") : "")
-    : '<div class="plan-line">No disturbances. Use “Place on map” to add a storm.</div>';
-  document.querySelectorAll("#lab-dist-list .dist[data-id]").forEach((el) =>
-    el.addEventListener("click", () => labSelect(el.dataset.id)));
-  labRenderTimeline(false);
-}
-
 function labRenderTimeline(force) {
   const st = lab.state, box = $("lab-timeline");
   if (!st) return;
@@ -1130,4 +906,539 @@ function labRenderTimeline(force) {
     if (e && e.position) labShowEvent(seq, false);
   }));
   if (atBottom && !force) box.scrollTop = box.scrollHeight;
+}
+
+/* ------------------------------------------------------------------ */
+/* Floating panels - UI STATE ONLY (position, collapsed, hidden).      */
+/* Nothing here reads or changes simulation state.                     */
+/* ------------------------------------------------------------------ */
+const UI_KEY = "nautilus.panels.v1";
+const ui = { panels: {}, editing: false, evDetail: false, selectedR: null };
+const FPANELS = () => [...document.querySelectorAll(".fpanel")];
+const pstate = (el) => ui.panels[el.id] || (ui.panels[el.id] = {});
+
+function uiLoad() {
+  try { ui.panels = JSON.parse(sessionStorage.getItem(UI_KEY) || "{}") || {}; }
+  catch (e) { ui.panels = {}; }
+}
+function uiSave() {
+  try { sessionStorage.setItem(UI_KEY, JSON.stringify(ui.panels)); }
+  catch (e) { /* storage unavailable: positions are simply not remembered */ }
+}
+
+/* Areas a panel must not cover: the top bar and Google's map controls. */
+function keepOut() {
+  const rects = [$("topbar").getBoundingClientRect()];
+  const zoom = document.querySelector('#map button[aria-label="Zoom in"]');
+  if (zoom && zoom.parentElement) rects.push(zoom.parentElement.getBoundingClientRect());
+  const types = document.querySelector('#map [role="menubar"]');
+  if (types) rects.push(types.getBoundingClientRect());
+  return rects.filter((r) => r.width > 0 && r.height > 0);
+}
+
+function placePanel(el, x, y) {
+  const W = window.innerWidth, H = window.innerHeight;
+  const w = el.offsetWidth, h = el.offsetHeight;
+  const clampX = (v) => Math.max(8, Math.min(W - w - 8, v));
+  const clampY = (v) => Math.max(8, Math.min(H - h - 8, v));
+  x = clampX(x); y = clampY(y);
+  for (const k of keepOut()) {
+    const hit = !(x + w <= k.left || k.right <= x || y + h <= k.top || k.bottom <= y);
+    if (!hit) continue;
+    if (k.left > W / 2) x = clampX(k.left - w - 8);       // control on the right edge
+    else y = clampY(Math.max(y, k.bottom + 8));           // top bar
+  }
+  Object.assign(el.style, { left: Math.round(x) + "px", top: Math.round(y) + "px",
+                            right: "auto", bottom: "auto" });
+}
+
+const visiblePanel = (el) => !el.classList.contains("hidden") && !el.classList.contains("fp-hidden");
+
+/* Automatic placement (default layout, expand, content growth): move the panel
+   into the nearest free vertical gap of its column - below the top bar and
+   between the other panels - and if no gap is tall enough, use the largest one
+   and let the panel body scroll. Positions the user dragged to are respected. */
+function fitPanel(el) {
+  if (!visiblePanel(el) || el.classList.contains("dragging")) return;
+  el.style.maxHeight = "";
+  const r = el.getBoundingClientRect(), need = el.offsetHeight;
+  const top0 = $("topbar").getBoundingClientRect().bottom + 8, bottom0 = window.innerHeight - 8;
+  const blocks = FPANELS().filter((o) => o !== el && visiblePanel(o))
+    .map((o) => o.getBoundingClientRect())
+    .filter((q) => !(q.right <= r.left || r.right <= q.left))
+    .sort((a, b) => a.top - b.top);
+  const clear = r.top >= top0 && r.bottom <= bottom0 &&
+    blocks.every((q) => q.bottom <= r.top || r.bottom <= q.top);
+  if (clear) return;
+  const free = []; let y = top0;
+  for (const q of blocks) { if (q.top - 8 > y) free.push([y, q.top - 8]); y = Math.max(y, q.bottom + 8); }
+  if (bottom0 > y) free.push([y, bottom0]);
+  if (!free.length) return;
+  const at = ([a, b], h) => Math.max(a, Math.min(b - h, r.top));
+  const fits = free.filter(([a, b]) => b - a >= need)
+    .sort((p, q) => Math.abs(at(p, need) - r.top) - Math.abs(at(q, need) - r.top));
+  if (fits.length) return placePanel(el, r.left, at(fits[0], need));
+  const big = free.sort((p, q) => (q[1] - q[0]) - (p[1] - p[0]))[0];
+  if (big[1] - big[0] >= 90) {
+    el.style.maxHeight = (big[1] - big[0]) + "px";
+    placePanel(el, r.left, big[0]);
+  }
+}
+
+function defaultPos(el) {
+  const spec = {};
+  (el.dataset.pos || "left:16,top:72").split(",").forEach((kv) => {
+    const [k, v] = kv.split(":"); spec[k] = Number(v);
+  });
+  return { x: "left" in spec ? spec.left : window.innerWidth - el.offsetWidth - spec.right,
+           y: "top" in spec ? spec.top : window.innerHeight - el.offsetHeight - spec.bottom };
+}
+
+function layoutPanel(el, avoid = true) {
+  if (el.classList.contains("hidden") || el.classList.contains("fp-hidden")) return;
+  const st = pstate(el);
+  const p = st.x != null ? { x: st.x, y: st.y } : defaultPos(el);
+  placePanel(el, p.x, p.y);
+  if (avoid && st.x == null) fitPanel(el);
+}
+// least important first: they give way, so Simulation and Weather keep their size
+const FIT_ORDER = ["fp-key", "fp-events", "fp-setup", "fp-weather", "fp-sim"];
+function layoutPanels() {      // place everything first, then resolve overlaps
+  FPANELS().forEach((el) => layoutPanel(el, false));
+  FIT_ORDER.map($).forEach((el) => { if (pstate(el).x == null) fitPanel(el); });
+}
+
+function front(el) {             // stacking stays below the top bar, toasts and loaders
+  const others = FPANELS().filter((p) => p !== el)
+    .sort((a, b) => (+a.style.zIndex || 10) - (+b.style.zIndex || 10));
+  [...others, el].forEach((p, i) => { p.style.zIndex = 11 + i; });
+}
+
+function setCollapsed(el, on, save = true) {
+  el.classList.toggle("collapsed", on);
+  const b = el.querySelector(".fp-collapse");
+  b.textContent = on ? "+" : "−"; b.title = on ? "Expand" : "Collapse";
+  if (save) { pstate(el).collapsed = on; uiSave(); }
+  if (!el.classList.contains("hidden")) {
+    const r = el.getBoundingClientRect(); placePanel(el, r.left, r.top);
+    if (!on && save && pstate(el).x == null) fitPanel(el);
+  }
+}
+
+function setPanelHidden(el, on) {
+  el.classList.toggle("fp-hidden", on);
+  pstate(el).hidden = on; uiSave();
+  if (!on) { front(el); layoutPanel(el); }
+  renderDock();
+}
+
+function renderDock() {
+  const dock = $("lab-dock");
+  dock.innerHTML = FPANELS().map((el) => `<button data-p="${el.id}"
+    class="${el.classList.contains("fp-hidden") ? "" : "on"}"
+    title="Show or hide the ${esc(el.dataset.title)} panel">${esc(el.dataset.short || el.dataset.title)}</button>`).join("");
+  dock.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    const el = $(b.dataset.p);
+    setPanelHidden(el, !el.classList.contains("fp-hidden"));
+  }));
+}
+
+function initPanels() {
+  uiLoad();
+  FPANELS().forEach((el) => {
+    const head = el.querySelector(".fp-head"), st = pstate(el);
+    setCollapsed(el, st.collapsed != null ? st.collapsed : el.dataset.collapsed === "1", false);
+    el.classList.toggle("fp-hidden", !!st.hidden);
+    el.querySelector(".fp-collapse").addEventListener("click", () =>
+      setCollapsed(el, !el.classList.contains("collapsed")));
+    el.querySelector(".fp-hide").addEventListener("click", () => setPanelHidden(el, true));
+    el.addEventListener("pointerdown", () => front(el), true);
+    head.addEventListener("pointerdown", (e) => {
+      // drag only from the header itself, never from its buttons or inputs
+      if (e.button !== 0 || e.target.closest("button, input, select, textarea, a, label")) return;
+      const r = el.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+      head.setPointerCapture(e.pointerId);
+      el.classList.add("dragging");
+      const move = (ev) => {
+        const x = Math.max(8, Math.min(window.innerWidth - el.offsetWidth - 8, ev.clientX - dx));
+        const y = Math.max(8, Math.min(window.innerHeight - 40, ev.clientY - dy));
+        Object.assign(el.style, { left: x + "px", top: y + "px", right: "auto", bottom: "auto" });
+      };
+      const up = () => {
+        ["pointermove", "pointerup", "pointercancel"].forEach((t) =>
+          head.removeEventListener(t, t === "pointermove" ? move : up));
+        el.classList.remove("dragging");
+        const p = el.getBoundingClientRect(); placePanel(el, p.left, p.top);
+        const q = el.getBoundingClientRect();
+        Object.assign(pstate(el), { x: q.left, y: q.top }); uiSave();
+      };
+      head.addEventListener("pointermove", move);
+      head.addEventListener("pointerup", up);
+      head.addEventListener("pointercancel", up);
+      e.preventDefault();
+    });
+  });
+  window.addEventListener("resize", () => { if (mode === "lab") layoutPanels(); });
+  // content growth (e.g. the weather editor opening) re-fits auto-placed panels
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver((entries) => entries.forEach(({ target }) => {
+      if (mode === "lab" && pstate(target).x == null && !target.style.maxHeight)
+        requestAnimationFrame(() => fitPanel(target));
+    }));
+    FPANELS().forEach((el) => ro.observe(el));
+  }
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape" && lab.placing) labCancelPlacing(); });
+  renderDock();
+}
+
+/* Shared form fields move between the route-planning panel and the lab. */
+const homes = {};
+function moveInto(id, slotId) {
+  const el = $(id);
+  if (!homes[id]) homes[id] = { parent: el.parentNode, next: el.nextSibling };
+  $(slotId).appendChild(el);
+}
+function moveHome(id) {
+  const h = homes[id];
+  if (h && $(id).parentNode !== h.parent) h.parent.insertBefore($(id), h.next);
+}
+
+/* ------------------------------------------------------------------ */
+/* Simulation lab - binding and presentation of backend state          */
+/* ------------------------------------------------------------------ */
+const W_KINDS = { storm: { delta_m: 5, radius_km: 150 }, calm: { delta_m: -2, radius_km: 150 } };
+const W_LABEL = { lat: "Latitude", lon: "Longitude", radius_km: "Size", delta_m: "Wave change" };
+const portShort = (n) => String(n).split(" (")[0];
+/* First listed cause, capitalised; the full trigger list is under Details. */
+const mainCause = (c) => { const m = String(c || "").split(";")[0].trim();
+  return m.charAt(0).toUpperCase() + m.slice(1); };
+
+async function bindLab() {
+  try {
+    const d = await (await fetch("/api/sim/presets")).json();
+    lab.presets = d.presets; lab.limits = d.limits;
+    const sel = $("lab-preset");
+    d.presets.forEach((p) => sel.add(new Option(
+      p.name === "none" ? "None - add your own weather" : p.name.replace(/_/g, " "), p.name)));
+    sel.value = "none";
+    const info = () => { const p = lab.presets.find((x) => x.name === sel.value);
+      $("lab-preset-info").textContent = p && p.name !== "none" ? p.description : ""; };
+    sel.addEventListener("change", info); info();
+  } catch (e) { toast("Could not load simulation presets: " + e.message); }
+  initPanels();
+  $("lab-create").addEventListener("click", () => labCreate(false));
+  $("lab-start").addEventListener("click", labStart);
+  $("lab-pause").addEventListener("click", labPause);
+  $("lab-step").addEventListener("click", () => labStepOnce());
+  $("lab-reset").addEventListener("click", labReset);
+  $("lab-routine").addEventListener("change", () => labRenderTimeline(true));
+  $("lab-safety").addEventListener("change", () => { if (lab.state && mode === "lab") labSafety(); });
+  $("lab-waves").addEventListener("change", labSyncOverlay);
+  $("w-add-storm").addEventListener("click", () => labStartPlacing("storm"));
+  $("w-add-calm").addEventListener("click", () => labStartPlacing("calm"));
+  $("w-place-cancel").addEventListener("click", (e) => { e.preventDefault(); labCancelPlacing(); });
+  ["w-delta", "w-radius"].forEach((id) => {
+    const s = $(id);
+    s.addEventListener("pointerdown", () => { ui.editing = true; });
+    s.addEventListener("input", labEditorLabels);
+    s.addEventListener("change", () => { ui.editing = false; labCommitEditor(); });
+  });
+  $("w-move").addEventListener("click", () => {
+    labCommitEditor({ lat: Number($("dist-lat").value), lon: Number($("dist-lon").value) });
+  });
+  $("dist-remove").addEventListener("click", () => {
+    if (!lab.selected) return;
+    const id = lab.selected; lab.selected = null;
+    labEditWeather(labWorkList().filter((x) => x.id !== id));
+  });
+  $("weather-apply").addEventListener("click", () => labAction("weather/apply"));
+  $("weather-discard").addEventListener("click", () => labAction("weather/discard"));
+  $("schedule-cancel").addEventListener("click", () => labAction("schedule/cancel"));
+  labRenderPanel();
+}
+
+async function labCreate(thenRun) {
+  if (scenario === "live")
+    return toast("The simulation uses offline weather: pick Typical or Rough.");
+  if ($("origin").value === $("dest").value)
+    return toast("Origin and destination are the same.");
+  labPause();
+  const old = lab.sid;
+  loading(true, "Planning the voyage…");
+  try {
+    const st = await labApi("POST", "/api/sim/sessions", labConfig());
+    if (old) labApi("DELETE", `/api/sim/sessions/${old}`).catch(() => {});
+    lab.sid = st.id; lab.lastSeq = 0; lab.selected = null; ui.selectedR = null;
+    lab.drawn = { routeKey: null, weatherKey: null, overlayUrl: null };
+    labClearMap();
+    labApply(st, true);
+    setCollapsed($("fp-setup"), true);            // setup done: give the map the space
+    if (thenRun) labStart();
+  } catch (e) {
+    toast("Could not start voyage: " + e.message);
+    if (!lab.sid) $("lab-status").textContent = "Voyage not started: " + e.message;
+  } finally { loading(false); }
+}
+
+function labStartPlacing(kind) {
+  if (!lab.sid) return toast("Start a voyage first.");
+  lab.placing = kind;
+  $("w-place-hint").classList.remove("hidden");
+  $("w-add-storm").classList.toggle("armed", kind === "storm");
+  $("w-add-calm").classList.toggle("armed", kind === "calm");
+  map.setOptions({ draggableCursor: "crosshair" });
+}
+function labCancelPlacing() {
+  lab.placing = false;
+  $("w-place-hint").classList.add("hidden");
+  $("w-add-storm").classList.remove("armed"); $("w-add-calm").classList.remove("armed");
+  if (map) map.setOptions({ draggableCursor: null });
+}
+
+function labInLimits(d) {
+  const L = lab.limits || {};
+  for (const k of ["lat", "lon", "radius_km", "delta_m"]) {
+    const [lo, hi] = L[k] || [-Infinity, Infinity];
+    if (!Number.isFinite(d[k]) || d[k] < lo || d[k] > hi) {
+      toast(`${W_LABEL[k]} must be between ${lo} and ${hi}.`); return false;
+    }
+  }
+  if (d.delta_m === 0) { toast("Wave change must not be 0."); return false; }
+  return true;
+}
+
+async function labMapClick(ev) {
+  if (mode !== "lab" || !lab.placing) return;
+  const kind = W_KINDS[lab.placing];
+  labCancelPlacing();
+  const d = { lat: +ev.latLng.lat().toFixed(3), lon: +ev.latLng.lng().toFixed(3), ...kind };
+  if (!labInLimits(d)) return;
+  const before = new Set(labWorkList().map((x) => x.id));
+  await labEditWeather([...labWorkList(), d]);
+  const added = labWorkList().find((x) => !before.has(x.id));
+  if (added) labSelect(added.id, true);
+}
+
+/* Send the selected disturbance with the editor's values (or `patch`). */
+function labCommitEditor(patch) {
+  const cur = labWorkList().find((x) => x.id === lab.selected);
+  if (!cur) return;
+  const upd = { ...cur, delta_m: Number($("w-delta").value),
+                radius_km: Number($("w-radius").value), ...(patch || {}) };
+  if (upd.delta_m === 0) upd.delta_m = cur.delta_m > 0 ? 0.5 : -0.5;
+  if (!labInLimits(upd)) return labRenderWeather();
+  labEditWeather(labWorkList().map((x) => x.id === cur.id ? upd : x));
+}
+
+function labEditorLabels() {
+  const d = Number($("w-delta").value);
+  $("w-delta-v").textContent = `${d > 0 ? "+" : ""}${d} m`;
+  $("w-radius-v").textContent = `${$("w-radius").value} km`;
+}
+
+function labSyncOverlay() {
+  const st = lab.state;
+  if (mode !== "lab") return;
+  $("legend").classList.add("hidden");           // the lab has its own map key
+  const show = $("lab-waves").checked;
+  if (!st) {
+    // No voyage yet: show the selected sea state's heatmap (the same overlay
+    // as the other modes) until the voyage's own weather field exists.
+    if (waveOverlay) waveOverlay.setMap(show ? map : null);
+    $("lab-legend-max").textContent = $("legend-max").textContent;
+    return;
+  }
+  if (waveOverlay) waveOverlay.setMap(null);     // the voyage's applied field replaces it
+  const url = st.weather.overlay.url;
+  if (lab.drawn.overlayUrl !== url) {
+    if (lab.objs.overlay) lab.objs.overlay.setMap(null);
+    lab.objs.overlay = new google.maps.GroundOverlay(url,
+      { north: META.region.lat_max, south: META.region.lat_min,
+        east: META.region.lon_max, west: META.region.lon_min }, { opacity: 0.6 });
+    lab.drawn.overlayUrl = url;
+  }
+  lab.objs.overlay.setMap(show ? map : null);
+  $("lab-legend-max").textContent = st.weather.overlay.legend_max_m + " m";
+}
+
+function labEnter() {
+  moveInto("voyage-fields", "lab-voyage-slot");
+  moveInto("reroute-settings", "lab-settings-slot");
+  layoutPanels();
+  renderDock();
+  labSyncOverlay();
+  if (lab.state) labDraw(true);
+  labRenderPanel();
+}
+
+function labLeave() {
+  labPause();
+  labCancelPlacing();
+  labClearMap();
+  if (lab.clickListener) { lab.clickListener.remove(); lab.clickListener = null; }
+  moveHome("voyage-fields");
+  moveHome("reroute-settings");
+  if (waveOverlay) waveOverlay.setMap($("use-waves").checked ? map : null);
+  if (waveOverlay) $("legend").classList.remove("hidden");
+}
+
+function labSelect(id, keep) {
+  lab.selected = keep || lab.selected !== id ? id : null;
+  if (lab.state) { labStyleCircles(); labRenderWeather(); labControls(); }
+}
+
+function labShowEvent(seq) {
+  const e = lab.state && lab.state.timeline.find((x) => x.seq === seq);
+  if (!e) return;
+  const r = lab.state.reroutes.find((x) => x.seq === seq);
+  if (r) { ui.selectedR = r.no; labRenderEvents(); }
+  if (e.position) {
+    map.panTo(toLL(e.position));
+    info.setPosition(toLL(e.position));
+    info.setContent(`<div class="wx-pop"><b>${r ? "R" + r.no + " · route changed" : "Step " + e.step}</b>` +
+      `${esc((e.detail && e.detail.cause) || e.message)}</div>`);
+    info.open(map);
+  }
+}
+
+/* --- presentation ----------------------------------------------------------- */
+function labControls() {
+  const st = lab.state, has = !!lab.sid && !!st;
+  const done = has && ["completed", "error"].includes(st.status);
+  $("lab-start").disabled = lab.running || done;
+  $("lab-start").textContent = has && st.step > 0 ? "▶ Resume" : "▶ Start";
+  $("lab-pause").disabled = !lab.running;
+  $("lab-step").disabled = !has || lab.running || lab.busy || lab.stepping || done;
+  $("lab-reset").disabled = !has;
+  const w = has ? st.weather : null, editable = has && !done;
+  ["w-add-storm", "w-add-calm", "w-delta", "w-radius", "w-move", "dist-remove"]
+    .forEach((id) => { $(id).disabled = !editable; });
+  $("weather-apply").disabled = !editable || !w || !w.pending;
+  $("weather-discard").disabled = !has || !w || !w.pending;
+  $("schedule-cancel").disabled = !editable;
+  let label = "No voyage", cls = "";
+  if (has) {
+    if (st.status === "completed") { label = "Arrived"; cls = "done"; }
+    else if (st.status === "error") { label = "Error"; cls = "error"; }
+    else if (lab.running) { label = "Running"; cls = "running"; }
+    else label = st.step === 0 ? "Ready" : "Paused";
+  }
+  const chip = $("lab-state-chip");
+  chip.textContent = label; chip.className = "chip " + cls;
+  if (has) {
+    const m = st.metrics, pct = Math.round(100 * m.progress);
+    $("lab-status").textContent = st.status === "completed"
+      ? `Arrived after ${m.sailed_hours.toFixed(0)} h (model)`
+      : `Step ${st.step} · ${pct}% · ~${m.remaining_hours.toFixed(0)} h to go`;
+  }
+  $("lab-progress-bar").style.width = has ? `${100 * st.metrics.progress}%` : "0";
+}
+
+function labRenderPanel() {
+  labControls();
+  const st = lab.state;
+  $("lab-title").textContent = st
+    ? `${portShort(st.setup.origin)} → ${portShort(st.setup.dest)} · ${st.setup.vessel}`
+    : "No voyage yet";
+  if (!st) {
+    if (!/Voyage not started/.test($("lab-status").textContent))
+      $("lab-status").textContent = "Set up a voyage, then Start.";
+    ["lab-dist-list", "lab-ev-current", "lab-reroutes", "lab-timeline"]
+      .forEach((id) => { $(id).innerHTML = ""; });
+    $("lab-weather-badge").classList.add("hidden");
+    $("w-editor").classList.add("hidden");
+    $("lab-ev-current").innerHTML = '<span class="why">Route changes will appear here.</span>';
+    return;
+  }
+  const k = st.constraints;
+  $("lab-constraints").textContent = k
+    ? `Route keeps ≥ ${k.min_depth_m} m depth and ≥ ${k.coastal_clearance_km} km from land.` : "";
+  labRenderWeather();
+  labRenderEvents();
+  labRenderTimeline(false);
+}
+
+function labRenderWeather() {
+  const st = lab.state; if (!st) return;
+  const w = st.weather, list = w.pending || w.applied;
+  const applied = new Set(w.applied.map((d) => JSON.stringify([d.id, d.lat, d.lon, d.radius_km, d.delta_m])));
+  const nPending = w.pending ? list.filter((d) => !applied.has(JSON.stringify(
+    [d.id, d.lat, d.lon, d.radius_km, d.delta_m]))).length +
+    w.applied.filter((a) => !w.pending.some((p) => p.id === a.id)).length : 0;
+  const badge = $("lab-weather-badge");
+  badge.classList.toggle("hidden", !w.pending);
+  badge.textContent = `${nPending || ""} pending`.trim();
+  const row = (d) => {
+    const isApplied = applied.has(JSON.stringify([d.id, d.lat, d.lon, d.radius_km, d.delta_m]));
+    return `<div class="dist ${d.delta_m < 0 ? "calm" : ""} ${d.id === lab.selected ? "selected" : ""}"
+      data-id="${esc(d.id)}"><span class="dot"></span><b>${d.delta_m > 0 ? "Storm" : "Calm"}</b>
+      ${d.delta_m > 0 ? "+" : ""}${d.delta_m} m · ${d.radius_km} km
+      <span class="st ${isApplied ? "" : "pending"}">${isApplied ? "active" : "pending"}</span></div>`;
+  };
+  const removed = w.pending ? w.applied.filter((a) => !w.pending.some((p) => p.id === a.id)) : [];
+  $("lab-dist-list").innerHTML = list.map(row).join("") +
+    removed.map((a) => `<div class="dist"><span class="dot"></span><s>${a.delta_m > 0 ? "Storm" : "Calm"}
+      ${a.delta_m} m</s><span class="st pending">removal pending</span></div>`).join("") ||
+    '<div class="hint">No weather changes. Add a storm or a calm patch, then click the map.</div>';
+  document.querySelectorAll("#lab-dist-list .dist[data-id]").forEach((el) =>
+    el.addEventListener("click", () => labSelect(el.dataset.id)));
+  const sel = list.find((d) => d.id === lab.selected);
+  $("w-editor").classList.toggle("hidden", !sel);
+  if (sel && !ui.editing) {
+    $("w-radius").max = Math.max(800, sel.radius_km);
+    $("w-delta").value = sel.delta_m; $("w-radius").value = sel.radius_km;
+    $("dist-lat").value = sel.lat; $("dist-lon").value = sel.lon;
+    labEditorLabels();
+  }
+  const steps = w.schedule.map((x) => x.step);
+  $("w-schedule").classList.toggle("hidden", !steps.length);
+  $("schedule-cancel").classList.toggle("hidden", !steps.length);
+  $("w-schedule").textContent = steps.length
+    ? `Scenario weather changes at step ${steps.join(", ")}.` : "";
+}
+
+function labRenderEvents() {
+  const st = lab.state; if (!st) return;
+  const rr = st.reroutes;
+  $("lab-ev-count").classList.toggle("hidden", !rr.length);
+  $("lab-ev-count").textContent = `${rr.length} change${rr.length === 1 ? "" : "s"}`;
+  if (ui.selectedR == null || !rr.some((r) => r.no === ui.selectedR))
+    ui.selectedR = rr.length ? rr[rr.length - 1].no : null;
+  const cur = rr.find((r) => r.no === ui.selectedR);
+  let html;
+  if (!st.setup.rerouting_enabled) {
+    html = '<span class="why">Automatic rerouting is off: the vessel keeps its initial route.</span>';
+  } else if (cur) {
+    const e = st.timeline.find((x) => x.seq === cur.seq), d = e.detail;
+    const faster = d.remaining_hours && d.alternative_hours != null
+      ? Math.round(d.remaining_hours - d.alternative_hours) : null;
+    html = `<div class="r-title">R${cur.no} · Route changed at step ${cur.step}</div>
+      <div class="why">${esc(mainCause(d.cause))}${faster != null
+        ? ` · new plan ~${faster} h shorter (model)` : ""}</div>
+      <button class="linkish" id="ev-details-btn">${ui.evDetail ? "Hide details" : "Details"}</button>
+      ${ui.evDetail ? `<div class="detail">
+        <span>Triggers</span><span>${esc(d.triggers.join("; ") || "none")}</span>
+        <span>Old plan</span><span>${d.remaining_hours} h to go</span>
+        <span>New plan</span><span>${d.alternative_hours} h to go (${d.gain_pct}% better)</span>
+        <span>Detour</span><span>up to ${d.corridor_shift_km} km from the old plan</span>
+        <span>Turn</span><span>${d.heading_change_deg == null ? "–" : d.heading_change_deg + "°"}</span></div>` : ""}`;
+  } else {
+    const last = [...st.timeline].reverse().find((x) => x.kind === "evaluation" &&
+      !["no_trigger", "adopted"].includes(x.detail.decision));
+    html = `<span class="why">No route change yet.</span>${last
+      ? `<div class="why">Step ${last.step}: ${esc(last.message)}</div>` : ""}`;
+  }
+  $("lab-ev-current").innerHTML = html;
+  const btn = $("ev-details-btn");
+  if (btn) btn.addEventListener("click", () => { ui.evDetail = !ui.evDetail; labRenderEvents(); });
+  $("lab-reroutes").innerHTML = rr.length > 1 ? rr.map((r) =>
+    `<button data-seq="${r.seq}" class="${r.no === ui.selectedR ? "sel" : ""}">R${r.no}</button>`).join("") : "";
+  document.querySelectorAll("#lab-reroutes button").forEach((b) =>
+    b.addEventListener("click", () => labShowEvent(Number(b.dataset.seq))));
+  const out = $("lab-outcome");
+  if (st.status === "completed" && st.setup.rerouting_enabled) {
+    out.classList.remove("hidden");
+    out.textContent = `Arrived after ${st.metrics.sailed_hours.toFixed(0)} h. The same voyage ` +
+      `without rerouting: ${st.comparison_no_rerouting.sailed_hours.toFixed(0)} h (model).`;
+  } else out.classList.add("hidden");
 }

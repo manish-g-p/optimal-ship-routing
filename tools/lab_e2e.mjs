@@ -15,6 +15,7 @@ const chrome = spawn(CHROME, ["--headless=new", "--no-sandbox", "--disable-gpu",
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let ws, id = 0; const pending = new Map();
 const consoleIssues = [], httpErrors = [], failed = [];
+const apiCalls = new Set();      // "METHOD /api/path {body keys}" - request shapes sent by the UI
 const results = [];
 const check = (name, ok, info = "") => { results.push([ok ? "PASS" : "FAIL", name, info]);
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${info ? "  -- " + info : ""}`); };
@@ -39,6 +40,24 @@ async function shot(name) {
   writeFileSync(`${OUT}/${name}.png`, Buffer.from(r.result.data, "base64"));
 }
 const state = (field) => ev(`return lab.state ? lab.state.${field} : null;`);
+async function mouseDrag(x0, y0, dx, dy) {          // real pointer events (press, move, release)
+  await send("Input.dispatchMouseEvent", { type: "mousePressed", x: x0, y: y0, button: "left", clickCount: 1 });
+  for (let i = 1; i <= 8; i++)
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: x0 + dx * i / 8, y: y0 + dy * i / 8, button: "left", buttons: 1 });
+  await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: x0 + dx, y: y0 + dy, button: "left", clickCount: 1 });
+  await sleep(250);
+}
+const rect = (sel) => ev(`const r=document.querySelector("${sel}").getBoundingClientRect();return {x:r.left,y:r.top,w:r.width,h:r.height};`);
+/* every visible floating panel inside the viewport and clear of other panels,
+   the top bar and the Google zoom / map-type controls */
+const LAYOUT = `const vis=[...document.querySelectorAll('.fpanel')].filter(p=>p.offsetParent!==null);
+  const R=vis.map(p=>[p.id,p.getBoundingClientRect()]);
+  const hit=(p,q)=>!(p.right<=q.left||q.right<=p.left||p.bottom<=q.top||q.bottom<=p.top);
+  const bad=[];
+  for(const [i,r] of R){ if(r.left<0||r.top<0||r.right>innerWidth||r.bottom>innerHeight) bad.push(i+' off-screen');
+    for(const [j,q] of R) if(i<j && hit(r,q)) bad.push(i+' x '+j);
+    for(const k of keepOut()) if(hit(r,k)) bad.push(i+' covers a control/top bar'); }
+  return {n:R.length, bad, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth};`;
 
 try {
   let targets;
@@ -55,6 +74,12 @@ try {
       consoleIssues.push("console.error " + d.params.args.map((a) => a.value ?? a.description).join(" ").slice(0, 200));
     if (d.method === "Network.responseReceived" && d.params.response.status >= 400)
       httpErrors.push(`${d.params.response.status} ${d.params.response.url.replace(BASE, "")}`);
+    if (d.method === "Network.requestWillBeSent" && d.params.request.url.includes("/api/")) {
+      const rq = d.params.request, path = new URL(rq.url).pathname.replace(/[0-9a-f]{32}/, "<id>");
+      let keys = "";
+      try { const b = JSON.parse(rq.postData || "null"); if (b && typeof b === "object") keys = JSON.stringify(Object.keys(b).sort()); } catch {}
+      apiCalls.add(`${rq.method} ${path} ${keys}`);
+    }
     if (d.method === "Network.loadingFailed" && !d.params.canceled)
       failed.push(`${d.params.errorText} ${d.params.type}`);
   });
@@ -73,15 +98,73 @@ try {
 
   // ---- 2. lab mode ----
   await ev(`document.querySelector('#mode button[data-val=lab]').click();`);
-  check("lab mode: lab panel + control bar visible, route controls hidden",
-    await ev("return !$('lab-panel').classList.contains('hidden') && !$('lab-bar').classList.contains('hidden') && $('go').classList.contains('hidden') && $('results').classList.contains('hidden');"));
+  await sleep(600);
+  check("lab mode: setup, simulation and weather panels visible; route-planning panel hidden",
+    await ev("return ['fp-setup','fp-sim','fp-weather'].every(id=>$(id).offsetParent!==null) && $('side-panel').offsetParent===null && $('go').offsetParent===null && $('results').classList.contains('hidden');"));
+  const fresh = await ev(`const vis=[...document.querySelectorAll('.fpanel')].filter(p=>p.offsetParent!==null);
+    const area=vis.reduce((a,p)=>{const r=p.getBoundingClientRect();return a+r.width*r.height;},0)/(innerWidth*innerHeight);
+    const text=vis.map(p=>p.innerText).join(' ');
+    return {area:+area.toFixed(3), collapsed:vis.filter(p=>p.classList.contains('collapsed')).map(p=>p.id), clutter:/route cost|projected|km sailed|cells explored|h sailed/i.test(text)};`);
+  check("fresh lab: map dominant (panels < 30% of viewport), secondary panels collapsed, no metric clutter",
+    fresh.area < 0.30 && fresh.collapsed.includes("fp-events") && fresh.collapsed.includes("fp-key") && !fresh.clutter, JSON.stringify(fresh));
+  await shot("0-lab-fresh");
+  const heat = `return {base: !!waveOverlay && waveOverlay.getMap() === map, sim: !!lab.objs.overlay && lab.objs.overlay.getMap() === map, legend: $('lab-legend-max').textContent};`;
+  const hm0 = await ev(heat);
+  await ev("$('lab-waves').click();");
+  const hmOff = await ev(heat);
+  await ev("$('lab-waves').click();");
+  const hmOn = await ev(heat);
+  check("wave heatmap shown in the lab before a voyage exists, and the toggle works",
+    hm0.base && !hmOff.base && hmOn.base && /\d m/.test(hm0.legend), JSON.stringify([hm0, hmOff, hmOn]));
+
+  // ---- panels: drag, collapse, hide/dock, front, map still interactive ----
+  const w0 = await rect("#fp-weather"), h0 = await rect("#fp-weather .fp-title");
+  await mouseDrag(h0.x + 10, h0.y + h0.h / 2, -220, 140);
+  const w1 = await rect("#fp-weather");
+  check("panel drags by its header and stays where dropped",
+    Math.abs(w1.x - (w0.x - 220)) < 3 && Math.abs(w1.y - (w0.y + 140)) < 3 &&
+    await ev("return pstate($('fp-weather')).x !== undefined;"), `moved (${Math.round(w1.x - w0.x)}, ${Math.round(w1.y - w0.y)})`);
+  const b0 = await rect("#fp-weather .fp-collapse");
+  await mouseDrag(b0.x + b0.w / 2, b0.y + b0.h / 2, -150, 80);     // press on a header BUTTON
+  const w2 = await rect("#fp-weather");
+  await ev("if ($('fp-weather').classList.contains('collapsed')) $('fp-weather').querySelector('.fp-collapse').click();");
+  const sp = await rect("#lab-speed"), simBefore = await rect("#fp-sim");
+  await mouseDrag(sp.x + 10, sp.y + sp.h / 2, 120, -120);           // press on a SELECT in a body
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+  const simAfter = await rect("#fp-sim");
+  check("dragging from header buttons or form controls does not move a panel",
+    Math.abs(w2.x - w1.x) < 1 && Math.abs(w2.y - w1.y) < 1 && Math.abs(simAfter.x - simBefore.x) < 1 && Math.abs(simAfter.y - simBefore.y) < 1);
+  await ev("$('fp-weather').querySelector('.fp-collapse').click();");
+  const wc = await rect("#fp-weather");
+  await ev("$('fp-weather').querySelector('.fp-collapse').click();");
+  const we = await rect("#fp-weather");
+  check("panel collapses to its header and expands again", wc.h < 50 && we.h > 100, `collapsed ${Math.round(wc.h)} px, expanded ${Math.round(we.h)} px`);
+  await ev("$('fp-events').querySelector('.fp-hide').click();");
+  const hidden = await ev("return $('fp-events').offsetParent === null && !document.querySelector('#lab-dock button[data-p=fp-events]').classList.contains('on');");
+  await ev("document.querySelector('#lab-dock button[data-p=fp-events]').click();");
+  check("panel hides to the dock and comes back from it", hidden &&
+    await ev("return $('fp-events').offsetParent !== null && document.querySelector('#lab-dock button[data-p=fp-events]').classList.contains('on');"));
+  const st0 = await rect("#fp-setup .fp-title");
+  await send("Input.dispatchMouseEvent", { type: "mousePressed", x: st0.x + 5, y: st0.y + 5, button: "left", clickCount: 1 });
+  await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: st0.x + 5, y: st0.y + 5, button: "left", clickCount: 1 });
+  check("clicking a panel brings it to the front",
+    await ev("const z=[...document.querySelectorAll('.fpanel')].map(p=>+p.style.zIndex||10); return +$('fp-setup').style.zIndex === Math.max(...z);"));
+  const c0 = await ev("return map.getCenter().toJSON();");
+  await mouseDrag(700, 450, 160, 60);                                  // empty map area
+  const c1 = await ev("return map.getCenter().toJSON();");
+  check("map still pans with the mouse (panels do not capture map interaction)",
+    Math.abs(c1.lng - c0.lng) > 0.1 || Math.abs(c1.lat - c0.lat) > 0.1, JSON.stringify([c0, c1]));
+  await ev("lab.selected = null; ui.panels = {}; uiSave(); layoutPanels();");   // back to default layout
   check("controls before a voyage: Step/Pause/Reset disabled",
     await ev("return $('lab-step').disabled && $('lab-pause').disabled && $('lab-reset').disabled;"));
-  await ev(`$('vessel').value='General Cargo'; $('lab-preset').value='none'; $('lab-speed').value='150';`);
+  await ev(`$('vessel').value='General Cargo'; $('vessel').dispatchEvent(new Event('change')); $('lab-preset').value='none'; $('lab-speed').value='150';`);
 
   // start -> runs automatically
   await ev(`$('lab-start').click();`);
   await waitFor("lab.state && lab.state.step >= 3", 60000, "auto steps");
+  const hmRun = await ev(`return {base: !!waveOverlay && waveOverlay.getMap() === map, sim: !!lab.objs.overlay && lab.objs.overlay.getMap() === map};`);
+  check("during a voyage the heatmap shows the voyage's own weather field (one overlay, not two)",
+    hmRun.sim && !hmRun.base, JSON.stringify(hmRun));
   await ev(`$('lab-pause').click();`);
   await waitFor("!lab.loop", 15000, "loop stopped");
   const s1 = await state("step"); await sleep(2000); const s2 = await state("step");
@@ -104,13 +187,16 @@ try {
   const seqs = await ev("return lab.state.timeline.map(e=>e.seq);");
   check("timeline has no duplicate entries after pause/resume/step", new Set(seqs).size === seqs.length, `${seqs.length} entries`);
 
-  // ---- 3. manual storm by map click ----
-  await ev(`$('dist-delta').value='6'; $('dist-radius').value='150'; $('dist-place').click();`);
+  // ---- 3. manual storm: + Storm, click the map, adjust with the slider ----
+  await ev(`$('w-add-storm').click();`);
+  check("+ Storm arms map placement", await ev("return lab.placing === 'storm' && !$('w-place-hint').classList.contains('hidden');"));
   const target = await ev("const a=lab.state.routes.active; return a[Math.floor(a.length*0.5)];");
   await ev(`google.maps.event.trigger(map, 'click', { latLng: new google.maps.LatLng(${target[0]}, ${target[1]}) });`);
-  await waitFor("lab.state.weather.pending && lab.state.weather.pending.length === 1 && !lab.busy", 15000, "pending storm");
-  check("map click creates a PENDING storm (routing not yet aware)",
-    await ev("return lab.state.weather.applied.length === 0 && lab.state.weather.version === 0 && !$('lab-weather-badge').classList.contains('hidden') && !$('weather-apply').disabled;"),
+  await waitFor("lab.state.weather.pending && lab.state.weather.pending.length === 1 && !lab.busy && lab.selected", 15000, "pending storm");
+  await ev(`$('w-delta').value = '6'; $('w-delta').dispatchEvent(new Event('input')); $('w-delta').dispatchEvent(new Event('change'));`);
+  await waitFor("!lab.busy && lab.state.weather.pending[0].delta_m === 6", 15000, "slider edit");
+  check("map click creates a PENDING storm (routing not yet aware); slider edits it",
+    await ev("return lab.state.weather.applied.length === 0 && lab.state.weather.version === 0 && !$('lab-weather-badge').classList.contains('hidden') && !$('weather-apply').disabled && !$('w-editor').classList.contains('hidden') && $('w-delta-v').textContent === '+6 m';"),
     `circles on map: ${await ev("return lab.objs.circles.length")}`);
   await shot("2-pending-storm");
   await ev(`$('weather-apply').click();`);
@@ -155,16 +241,24 @@ try {
     await ev("return !!lab.objs.safety && lab.objs.safety.getMap() === map && /safety_image\\?vessel=/.test(lab.objs.safety.get('src'));"));
   await shot("3b-after-reroute-safety");
   await ev(`$('lab-safety').checked = false; $('lab-safety').dispatchEvent(new Event('change'));`);
-  await ev(`[...document.querySelectorAll('.tl.adopted')].pop().click();`);
-  await sleep(500);
-  check("timeline R1 entry opens decision detail (cost, alternative, gain, triggers)",
-    await ev("const t=document.querySelector('.tl.adopted.open .detail'); return !!t && /gain/.test(t.innerText) && /alternative/.test(t.innerText);"),
-    (await ev("const t=document.querySelector('.tl.adopted.open'); return t ? t.innerText.replace(/\\n+/g,' ').slice(0,200) : '';")));
+  await ev("if ($('fp-events').classList.contains('collapsed')) $('fp-events').querySelector('.fp-collapse').click();");
+  await sleep(300);
+  const evp = await ev("return $('lab-ev-current').innerText.replace(/\\n+/g,' | ');");
+  await ev("$('ev-details-btn').click();");
+  await sleep(300);
+  check("Route changes panel: R1 summary with cause; Details reveal triggers and plan comparison",
+    /R1 · Route changed/.test(evp) && /waves|costlier|re-check/i.test(evp) &&
+    await ev("const t=$('lab-ev-current').innerText; return /Triggers/.test(t) && /better/.test(t) && /Detour/.test(t);"), evp.slice(0, 160));
+  await ev("$('ev-log').open = true;");
+  await sleep(200);
+  check("full decision log still available (collapsed by default) and lists R1",
+    await ev("return [...document.querySelectorAll('#lab-timeline .tl.adopted')].some(t => /R1/.test(t.innerText));"));
+  await ev("$('ev-log').open = false;");
   await shot("3-reroute-R1");
 
-  // edit: select disturbance, move via form -> pending; discard
-  await ev(`document.querySelector('#lab-dist-list .dist[data-id]').click();`);
-  await ev(`$('dist-lat').value = String(Number($('dist-lat').value) + 1); $('dist-update').click();`);
+  // edit: select disturbance, move via the Position section -> pending; discard
+  await ev(`lab.selected = null; document.querySelector('#lab-dist-list .dist[data-id]').click();`);
+  await ev(`document.querySelector('.w-adv').open = true; $('dist-lat').value = String(Number($('dist-lat').value) + 1); $('w-move').click();`);
   await waitFor("lab.state.weather.pending && !lab.busy", 15000, "moved pending");
   check("moving a disturbance creates a pending change (timeline: moved)",
     await ev("return /moved to/.test(lab.state.timeline[lab.state.timeline.length-1].message);"));
@@ -173,14 +267,18 @@ try {
   check("discard pending restores the applied weather list", await ev("return lab.state.weather.applied.length === 1;"));
 
   // invalid input
-  await ev(`$('dist-delta').value='0'; $('dist-lat').value='12'; $('dist-lon').value='66'; $('dist-add').click();`);
+  await ev(`document.querySelector('#lab-dist-list .dist[data-id]').click(); if (!lab.selected) document.querySelector('#lab-dist-list .dist[data-id]').click();`);
+  await ev(`$('w-delta').value = '0'; $('w-delta').dispatchEvent(new Event('change'));`);
+  await waitFor("!lab.busy && lab.state.weather.pending", 15000, "zero snap");
+  check("wave change cannot be set to 0 (snaps to ±0.5 m instead of sending an invalid value)",
+    await ev("return Math.abs(lab.state.weather.pending.find(d=>d.id===lab.selected).delta_m) === 0.5;"));
+  await ev(`$('weather-discard').click();`);
+  await waitFor("lab.state.weather.pending === null && !lab.busy", 15000, "discard 2");
+  await ev(`document.querySelector('.w-adv').open = true; $('dist-lat').value='45'; $('w-move').click();`);
   await sleep(300);
-  check("invalid Δ=0 rejected in the browser with a message", await ev("return !$('toast').classList.contains('hidden') && /must not be 0/.test($('toast').textContent);"), await ev("return $('toast').textContent + ' | hidden=' + $('toast').classList.contains('hidden');"));
-  await ev(`$('dist-delta').value='5'; $('dist-lat').value='45'; $('dist-add').click();`);
-  await sleep(300);
-  check("out-of-region latitude rejected", await ev("return /lat must be/.test($('toast').textContent);"), await ev("return $('toast').textContent"));
+  check("out-of-region latitude rejected", await ev("return /Latitude must be/.test($('toast').textContent);"), await ev("return $('toast').textContent"));
   const httpBefore = httpErrors.length;
-  await ev(`lab.limits.lat = [-90, 90]; $('dist-add').click();`);   // bypass client check -> server must reject
+  await ev(`lab.limits.lat = [-90, 90]; $('dist-lat').value = '45'; $('w-move').click();`);   // bypass client check -> server must reject
   await waitFor(`!lab.busy`, 10000, "server validation");
   await sleep(500);
   check("server rejects invalid disturbance (400) and state stays intact",
@@ -208,6 +306,19 @@ try {
     await ev("return lab.state.metrics.reroutes === 0 && lab.state.routes.route_version === 0;"),
     await ev("return lab.state.timeline.filter(e=>e.kind==='evaluation' && e.detail.decision!=='no_trigger').map(e=>e.detail.decision+' '+(e.detail.gain_pct??'')).join(', ') || 'no triggered evaluation';"));
 
+  // + Calm and Remove
+  await ev(`$('w-add-calm').click();`);
+  await ev(`google.maps.event.trigger(map, 'click', { latLng: new google.maps.LatLng(${mid[0] - 2}, ${mid[1] - 2}) });`);
+  await waitFor("!lab.busy && lab.state.weather.pending && lab.state.weather.pending.some(d => d.delta_m < 0)", 15000, "calm");
+  const calmId = await ev("return lab.state.weather.pending.find(d => d.delta_m < 0).id;");
+  check("+ Calm places a calm patch (negative wave change), selected for editing",
+    await ev(`return lab.selected === '${calmId}' && /Calm/.test($('lab-dist-list').innerText);`));
+  await ev(`$('dist-remove').click();`);
+  await waitFor(`!lab.busy && !(lab.state.weather.pending || []).some(d => d.id === '${calmId}')`, 15000, "remove");
+  check("Remove deletes the selected disturbance (as a pending change)", true);
+  await ev(`$('weather-discard').click();`);
+  await waitFor("!lab.busy && lab.state.weather.pending === null", 15000, "discard 3");
+
   // ---- 4. preset to completion ----
   await ev(`$('lab-preset').value='storm_ahead'; $('lab-preset').dispatchEvent(new Event('change')); $('lab-create').click();`);
   await waitFor("lab.state && lab.state.setup.preset === 'storm_ahead' && lab.state.step === 0 && !lab.busy", 30000, "preset voyage");
@@ -218,22 +329,20 @@ try {
     fin.r >= 1 && fin.start && fin.step, `${fin.r} reroute(s), ${fin.h} h vs ${fin.nh} h without rerouting | ${fin.last.slice(0, 100)}`);
   await shot("4-preset-complete");
 
-  // ---- 5. layout ----
-  const ov0 = await ev(`const r=(id)=>document.querySelector(id).getBoundingClientRect();
-    const hit=(p,q)=>!(p.right<=q.left||q.right<=p.left||p.bottom<=q.top||q.bottom<=p.top);
-    const a=r('.panel-left'), b=r('#lab-panel'), c=r('#lab-bar'), l=r('#legend');
-    return !hit(a,b)&&!hit(a,c)&&!hit(b,c)&&!hit(l,c)&&!hit(l,b);`);
-  check("1500x950: panels, control bar and legend do not overlap", ov0);
-  await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
-  await sleep(800);
-  const overlap = await ev(`const r=(id)=>document.querySelector(id).getBoundingClientRect();
-    const a=r('.panel-left'), b=r('#lab-panel'), c=r('#lab-bar'), l=r('#legend');
-    const hit=(p,q)=>!(p.right<=q.left||q.right<=p.left||p.bottom<=q.top||q.bottom<=p.top);
-    return {lb:hit(a,b), lc:hit(a,c), bc:hit(b,c), legBar:hit(l,c), legPanel:hit(l,b), barVisible: c.bottom <= innerHeight && c.top >= 0, mapFree: b.left - a.right};`);
-  check("1280x800: panels, control bar and legend do not overlap; bar on screen", !overlap.lb && !overlap.lc && !overlap.bc && !overlap.legBar && !overlap.legPanel && overlap.barVisible, JSON.stringify(overlap));
+  // ---- 5. layout (default positions; every panel expanded = worst case) ----
+  await ev("ui.panels = {}; uiSave(); FPANELS().forEach(p => setCollapsed(p, false, false)); layoutPanels();");
+  await sleep(500);
+  for (const [w, h] of [[1500, 950], [1280, 800], [900, 700]]) {
+    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    await sleep(900);
+    const L = await ev(LAYOUT);
+    check(`${w}x${h}: all ${L.n} panels on screen, no overlaps, top bar and map controls clear, no page overflow`,
+      L.bad.length === 0 && !L.overflow, L.bad.join("; "));
+    await shot(`5-layout-${w}`);
+  }
   check("no stale info window from an earlier voyage", await ev("return !document.querySelector('.gm-style-iw');"));
-  await shot("5-layout-1280");
   await send("Emulation.clearDeviceMetricsOverride");
+  await ev("FPANELS().forEach(p => setCollapsed(p, p.id === 'fp-events' || p.id === 'fp-key', false)); layoutPanels();");
 
   // ---- 5b. infeasible voyage ----
   const keepSid = await ev("return lab.sid;");
@@ -246,8 +355,8 @@ try {
 
   // ---- 6. back to route planning ----
   await ev(`document.querySelector('#mode button[data-val=route]').click();`);
-  check("leaving lab clears its map objects and hides lab UI",
-    await ev("return lab.objs.track === null && lab.objs.circles.length === 0 && $('lab-panel').classList.contains('hidden') && $('lab-bar').classList.contains('hidden');"));
+  check("leaving lab clears its map objects, hides lab panels and returns the shared fields",
+    await ev("return lab.objs.track === null && lab.objs.circles.length === 0 && FPANELS().every(p => p.offsetParent === null) && $('voyage-fields').parentNode === $('side-panel');"));
   await ev(`$('go').click();`);
   await waitFor("!$('results').classList.contains('hidden') && document.querySelectorAll('#cards .card').length === 2", 60000, "route infeasible");
   check("route planning shows the infeasibility reason on both cards",
@@ -261,6 +370,8 @@ try {
   check("voyage replay mode still works", await ev("return simData && simData.dynamic.reroutes >= 1;"),
     await ev("return $('verdict').textContent;"));
   await ev(`document.querySelector('#mode button[data-val=lab]').click();`);
+  check("heatmap present after leaving and re-entering the lab",
+    await ev("return !!lab.objs.overlay && lab.objs.overlay.getMap() === map && !(waveOverlay && waveOverlay.getMap());"));
   check("re-entering lab restores the session", await ev("return lab.state && lab.objs.track && lab.objs.track.getPath().getLength() > 10;"));
   await shot("6-reenter-lab");
 } catch (e) {
@@ -272,6 +383,7 @@ try {
   console.log(`unexpected HTTP errors: ${deliberate.length ? deliberate.join(" | ") : "none"}`);
   console.log(`failed loads: ${failed.length ? failed.join(" | ") : "none"}`);
   console.log(`console errors / exceptions: ${consoleIssues.length ? "\n  " + consoleIssues.join("\n  ") : "none"}`);
+  writeFileSync(`${OUT}/api_calls.json`, JSON.stringify([...apiCalls].sort(), null, 1));
   const exc = consoleIssues.filter((x) => x.startsWith("EXCEPTION"));
   check("no uncaught JavaScript exceptions", exc.length === 0, exc.length ? exc.join(" | ") : "");
   const nf = results.filter((x) => x[0] === "FAIL").length;
